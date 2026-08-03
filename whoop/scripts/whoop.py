@@ -15,13 +15,12 @@ import random as random_module
 import re
 import secrets
 import shlex
+import subprocess
 import sys
 import tempfile
 import time
 from typing import Callable, Mapping
-from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlencode, urlparse
-from urllib.request import Request, urlopen
 import webbrowser
 
 
@@ -421,25 +420,80 @@ def _response_detail(body: bytes) -> str:
     return body[:300].decode("utf-8", errors="replace").strip()
 
 
-def urllib_transport(
+def _parse_curl_response_headers(raw: str) -> dict[str, str]:
+    # curl's -D output contains one status-line-plus-headers block per response it
+    # actually received (e.g. one per redirect hop, or a "100 Continue" block before
+    # the real one). Only the last block describes the response whose body/status
+    # this call is reporting.
+    blocks = [block for block in raw.split("\r\n\r\n") if block.strip()]
+    last_block = blocks[-1] if blocks else ""
+    headers: dict[str, str] = {}
+    for line in last_block.splitlines()[1:]:  # [0] is the "HTTP/x.y nnn ..." status line
+        if ":" in line:
+            key, _, value = line.partition(":")
+            headers[key.strip()] = value.strip()
+    return headers
+
+
+def curl_transport(
     method: str,
     url: str,
     headers: Mapping[str, str],
     body: bytes | None,
     timeout: float,
 ) -> HttpResponse:
-    request = Request(url, data=body, headers=dict(headers), method=method)
-    try:
-        with urlopen(request, timeout=timeout) as response:
-            return HttpResponse(
-                response.status,
-                dict(response.headers.items()),
-                response.read(),
+    # Shells out to curl rather than using urllib: WHOOP's Cloudflare front end
+    # rejects Python's own TLS client fingerprint outright (observed as Cloudflare
+    # error 1010, "banned browser signature") before any request even reaches
+    # WHOOP's application code, while curl's fingerprint is unaffected. This is a
+    # TLS-handshake-level block, not something an HTTP header like User-Agent can
+    # work around — routing the request through curl is the fix.
+    with tempfile.TemporaryDirectory() as tmp:
+        header_path = Path(tmp) / "headers"
+        body_path = Path(tmp) / "body"
+        command = [
+            "curl",
+            "-sS",
+            "-X",
+            method,
+            "-D",
+            str(header_path),
+            "-o",
+            str(body_path),
+            "-w",
+            "%{http_code}",
+            "--max-time",
+            str(timeout),
+        ]
+        for key, value in headers.items():
+            command += ["-H", f"{key}: {value}"]
+        if body is not None:
+            command += ["--data-binary", "@-"]
+        command.append(url)
+
+        try:
+            result = subprocess.run(
+                command,
+                input=body,
+                capture_output=True,
+                timeout=timeout + 10.0,
             )
-    except HTTPError as exc:
-        return HttpResponse(exc.code, dict(exc.headers.items()), exc.read())
-    except (URLError, OSError) as exc:
-        raise OSError("Network request failed.") from exc
+        except (subprocess.SubprocessError, OSError) as exc:
+            raise OSError("curl request failed.") from exc
+        if result.returncode != 0:
+            raise OSError(
+                "curl exited with status "
+                f"{result.returncode}: {result.stderr.decode('utf-8', errors='replace').strip()}"
+            )
+        try:
+            status = int(result.stdout.decode("ascii").strip())
+        except ValueError as exc:
+            raise OSError("curl returned an unexpected status code.") from exc
+        return HttpResponse(
+            status,
+            _parse_curl_response_headers(header_path.read_text(errors="replace")),
+            body_path.read_bytes(),
+        )
 
 
 def token_from_response(payload: Mapping[str, object], now: float) -> TokenSet:
@@ -495,7 +549,7 @@ def _post_token_form(
 def exchange_code(
     config: AppConfig,
     code: str,
-    transport: Transport = urllib_transport,
+    transport: Transport = curl_transport,
     now: float | None = None,
 ) -> TokenSet:
     return _post_token_form(
@@ -515,7 +569,7 @@ def exchange_code(
 def refresh_token(
     config: AppConfig,
     current: TokenSet,
-    transport: Transport = urllib_transport,
+    transport: Transport = curl_transport,
     now: float | None = None,
 ) -> TokenSet:
     return _post_token_form(
@@ -587,7 +641,7 @@ def authorize_profile(
     config: AppConfig,
     profile: str,
     *,
-    transport: Transport = urllib_transport,
+    transport: Transport = curl_transport,
     callback_receiver: Callable[
         [LoopbackBinding, str, float], Mapping[str, str]
     ]
@@ -715,7 +769,7 @@ class WhoopClient:
         config_dir: Path,
         env: Mapping[str, str],
         *,
-        transport: Transport = urllib_transport,
+        transport: Transport = curl_transport,
         sleep: Callable[[float], None] = time.sleep,
         random: Callable[[], float] = random_module.random,
         now: Callable[[], float] = time.time,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from http.server import BaseHTTPRequestHandler, HTTPServer
 import importlib.util
 import io
 import json
@@ -8,6 +9,7 @@ from pathlib import Path
 import stat
 import sys
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -346,6 +348,85 @@ class ClientPaginationTests(unittest.TestCase):
         self.assertEqual(client.tokens.access_token, "new-access")
         persisted = whoop.load_profile_tokens(self.config_dir, "default", {})
         self.assertEqual(persisted.refresh_token, "new-refresh")
+
+
+class _EchoHandler(BaseHTTPRequestHandler):
+    def _handle(self) -> None:
+        length = int(self.headers.get("Content-Length", 0))
+        received_body = self.rfile.read(length) if length else b""
+        if self.path == "/error":
+            self.send_response(403)
+            payload = b"blocked"
+        else:
+            payload = json.dumps(
+                {
+                    "method": self.command,
+                    "path": self.path,
+                    "received_header": self.headers.get("X-Test-Header", ""),
+                    "body": received_body.decode("utf-8"),
+                }
+            ).encode()
+            self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def do_GET(self) -> None:
+        self._handle()
+
+    def do_POST(self) -> None:
+        self._handle()
+
+    def log_message(self, format: str, *args: object) -> None:
+        return
+
+
+class CurlTransportTests(unittest.TestCase):
+    """Exercises curl_transport for real, against a local server, rather than mocking
+    subprocess — the whole point of this transport is a real curl binary's real TLS/
+    request behavior, so a mock would validate nothing about the actual fix."""
+
+    def setUp(self) -> None:
+        self.server = HTTPServer(("127.0.0.1", 0), _EchoHandler)
+        self.port = self.server.server_address[1]
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+
+    def tearDown(self) -> None:
+        self.server.shutdown()
+        self.thread.join()
+        self.server.server_close()
+
+    def test_get_round_trip(self) -> None:
+        response = whoop.curl_transport(
+            "GET", f"http://127.0.0.1:{self.port}/some/path", {}, None, 5.0
+        )
+        self.assertEqual(response.status, 200)
+        self.assertEqual(response.headers.get("Content-Type"), "application/json")
+        payload = json.loads(response.body)
+        self.assertEqual(payload["method"], "GET")
+        self.assertEqual(payload["path"], "/some/path")
+
+    def test_post_sends_headers_and_body(self) -> None:
+        response = whoop.curl_transport(
+            "POST",
+            f"http://127.0.0.1:{self.port}/token",
+            {"X-Test-Header": "hello"},
+            b"grant_type=refresh_token",
+            5.0,
+        )
+        payload = json.loads(response.body)
+        self.assertEqual(payload["method"], "POST")
+        self.assertEqual(payload["received_header"], "hello")
+        self.assertEqual(payload["body"], "grant_type=refresh_token")
+
+    def test_non_2xx_status_and_body_are_both_returned(self) -> None:
+        response = whoop.curl_transport(
+            "GET", f"http://127.0.0.1:{self.port}/error", {}, None, 5.0
+        )
+        self.assertEqual(response.status, 403)
+        self.assertEqual(response.body, b"blocked")
 
 
 class CliTests(unittest.TestCase):
