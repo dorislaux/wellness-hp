@@ -1,22 +1,33 @@
 # WHOOP V2 resources
 
-Source: [WHOOP for Developers](https://developer.whoop.com/docs/introduction/), checked via search summaries on 2026-08-03 because this environment's egress policy blocks `developer.whoop.com` directly. Verify against the live docs before relying on exact field names in a new integration.
+Source: the official WHOOP API OpenAPI 3.0.1 spec (`title: "WHOOP API"`), pasted directly into the building session on 2026-08-03. This environment's egress policy blocks `developer.whoop.com` directly, so this file previously relied on search-engine summaries and a third-party client library instead of the real spec — everything below is now checked against the actual spec, not a summary of it.
 
-The scope column is a troubleshooting hint based on WHOOP's OAuth scope names; the API remains authoritative. The CLI does not reject a request locally based on this column.
+Every resource the CLI implements matched the spec exactly on first check: base URL, path, query parameter names, response field names, and OAuth scopes. Nothing needed correcting.
 
-| Resource | Path suffix | Time parameters | Collection | Expected scope |
-|---|---|---|---|---|
-| `cycle` | `cycle` | `start_datetime`, `end_datetime` | yes | `read:cycles` |
-| `recovery` | `recovery` | `start_datetime`, `end_datetime` | yes | `read:recovery` |
-| `sleep` | `activity/sleep` | `start_datetime`, `end_datetime` | yes | `read:sleep` |
-| `workout` | `activity/workout` | `start_datetime`, `end_datetime` | yes | `read:workout` |
-| `body_measurement` | `user/measurement/body` | none | no | `read:body_measurement` |
-| `profile_basic` | `user/profile/basic` | none | no | `read:profile` |
+| Resource | Path suffix | `operationId` | Time parameters | Collection | Required scope |
+|---|---|---|---|---|---|
+| `cycle` | `cycle` | `getCycleCollection` | `start_datetime`, `end_datetime` | yes | `read:cycles` |
+| `recovery` | `recovery` | `getRecoveryCollection` | `start_datetime`, `end_datetime` | yes | `read:recovery` |
+| `sleep` | `activity/sleep` | `getSleepCollection` | `start_datetime`, `end_datetime` | yes | `read:sleep` |
+| `workout` | `activity/workout` | `getWorkoutCollection` | `start_datetime`, `end_datetime` | yes | `read:workout` |
+| `body_measurement` | `user/measurement/body` | `getBodyMeasurement` | none | no | `read:body_measurement` |
+| `profile_basic` | `user/profile/basic` | `getProfileBasic` | none | no | `read:profile` |
 
 Notes specific to WHOOP's V2 API, as distinct from Oura's:
 
 - Collection responses use a `records` array, not `data`. The CLI normalizes this to `data` in its own output for consistency with the Oura skill's shape.
 - The pagination continuation token is asymmetric: a response reports it as `next_token`, but the next request must send it back as `nextToken`. The CLI handles this translation; callers of `get --all-pages` never see it.
+- The spec caps `limit` at 25 per page (default 10 if omitted). The CLI always requests 25 explicitly, to minimize round trips when `--all-pages` is used.
 - **Refresh tokens rotate on every use.** WHOOP invalidates the previous refresh token the moment a new one is issued. The CLI always persists whatever refresh token comes back from a refresh call; there is no option to keep reusing an old one.
 - `profile_basic` is named to avoid colliding with this CLI's own `--profile` flag (the local OAuth account selector), which is an unrelated concept.
 - Time ranges use full ISO 8601 datetimes (`start`/`end` upstream), not calendar dates. The `daily` command accepts `--start-date`/`--end-date` for convenience and expands them to full-day UTC bounds internally.
+- The `offline` scope requested by default (see `DEFAULT_SCOPES` in `whoop.py`) is **not** listed in the spec's `securitySchemes.OAuth.flows.authorizationCode.scopes` — that section only enumerates scopes that gate specific endpoints, so its absence doesn't confirm or rule out whether `offline` is real. This was asserted by secondary sources during the original build and remains unverified against a primary source. If a real `authorize` call doesn't return a `refresh_token`, that's the first thing to check.
+
+## Confirmed by the spec but not implemented
+
+These exist in the real API and were deliberately left out of this CLI's allowlist — noted here so a future change is a decision, not a rediscovery:
+
+- **By-ID lookups**: `getCycleById` (`/v2/cycle/{cycleId}`), `getSleepById` (`/v2/activity/sleep/{sleepId}`), `getWorkoutById` (`/v2/activity/workout/{workoutId}`), `getRecoveryForCycle` (`/v2/cycle/{cycleId}/recovery`), `getSleepForCycle` (`/v2/cycle/{cycleId}/sleep`). The CLI only exposes the collection form of each resource; fetching one specific record by ID isn't supported.
+- **`revokeUserOAuthAccess`** (`DELETE /v2/user/access`) — lets a user revoke their own granted access token. There's no `revoke` command in the CLI; deauthorizing today means removing the profile's token file by hand or revoking access on WHOOP's own account settings page. A reasonable candidate for a future command, mirroring `authorize`.
+- **`getActivityMapping`** (`/v1/activity-mapping/{activityV1Id}`) — looks up the v2 UUID for a legacy v1 activity ID. Only relevant for data recorded before WHOOP's v1→v2 migration; not needed for new integrations.
+- **The entire Partner API** (`/v2/partner/*`) — lab requisitions, service requests, diagnostic report uploads. This uses a completely different OAuth flow (`clientCredentials`, not `authorizationCode`), a separate token URL, and a `Trusted Partner` security scheme meant for approved WHOOP integration partners (e.g., diagnostic lab providers), not personal data access. Out of scope for this skill entirely.

@@ -26,6 +26,9 @@ import webbrowser
 
 
 DEFAULT_REDIRECT_URI = "http://localhost:8911/callback"
+# "offline" isn't in WHOOP's official OpenAPI spec's scope list (that list only
+# enumerates scopes that gate specific endpoints), so its necessity for
+# refresh tokens is unverified against a primary source — see references/endpoints.md.
 DEFAULT_SCOPES = (
     "read:profile read:body_measurement read:cycles read:recovery "
     "read:sleep read:workout offline"
