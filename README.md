@@ -2,6 +2,11 @@
 
 A privacy-conscious Oura Cloud API V2 skill for Codex and Claude Code. It includes a standard-library Python CLI for OAuth, profile-isolated tokens, pagination, retries, and allowlisted health-data queries.
 
+This repo root is the Oura skill specifically. Other provider skills live as siblings, each self-contained and independently installable:
+
+- [`whoop/`](whoop/) — the same kind of CLI, for WHOOP API v2.
+- [`dashboard/`](dashboard/) — reserved for future code that combines multiple providers' data into one view; see its README for scope.
+
 ## Requirements
 
 - macOS or Linux

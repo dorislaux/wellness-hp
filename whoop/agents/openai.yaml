@@ -1,0 +1,4 @@
+interface:
+  display_name: "Whoop"
+  short_description: "Query personal WHOOP wearable health data"
+  default_prompt: "Use $whoop to retrieve and analyze my recent WHOOP data."
