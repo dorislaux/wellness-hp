@@ -23,6 +23,27 @@ Notes specific to WHOOP's V2 API, as distinct from Oura's:
 - Time ranges use full ISO 8601 datetimes (`start`/`end` upstream), not calendar dates. The `daily` command accepts `--start-date`/`--end-date` for convenience and expands them to full-day UTC bounds internally.
 - The `offline` scope requested by default (see `DEFAULT_SCOPES` in `whoop.py`) is **not** listed in the spec's `securitySchemes.OAuth.flows.authorizationCode.scopes` — that section only enumerates scopes that gate specific endpoints, so its absence doesn't confirm or rule out whether `offline` is real. This was asserted by secondary sources during the original build and remains unverified against a primary source. If a real `authorize` call doesn't return a `refresh_token`, that's the first thing to check.
 
+## Fields selected for this project
+
+The CLI's `get`/`daily` commands always return the full JSON record for whatever resource is queried — WHOOP's API has no `fields` sparse-fieldset parameter to filter server-side (unlike Oura's). The list below is a decision about which of those fields matter for *this* project's cross-provider comparison and future dashboard work, so a future reader knows what to actually pull out of the full payload rather than re-deciding it. Fields not listed here are still present in the raw response; they're just not part of the plan.
+
+### Recovery — mixed treatment: one field kept separate, three pooled with Oura
+
+- **`recovery_score` — kept WHOOP-specific, not pooled with Oura's readiness score.** WHOOP and Oura calculate recovery/readiness by different methodologies, so treat these as two distinct metrics to display side by side, never averaged or merged into one number.
+- **`resting_heart_rate`, `hrv_rmssd_milli`, `skin_temp_celsius` — pooled with Oura's equivalent fields** for direct comparison between the two devices. (`spo2_percentage`, also in the `Recovery` schema, is deliberately not part of this list.)
+
+### Sleep — three percentage scores only
+
+- `sleep_performance_percentage`
+- `sleep_efficiency_percentage`
+- `sleep_consistency_percentage`
+
+The stage breakdown (`stage_summary`), the sleep-need breakdown (`sleep_needed`), and `respiratory_rate` are all available in the same response but out of scope for now.
+
+### Workout — everything
+
+Every field in `WorkoutV2` and its nested `score`/`zone_durations` objects: `sport_name`, `start`/`end`/`timezone_offset`, `score_state`, `strain`, `average_heart_rate`, `max_heart_rate`, `kilojoule`, `percent_recorded`, `distance_meter`, `altitude_gain_meter`, `altitude_change_meter`, and all six `zone_durations` buckets. Workout depth is considered a real advantage over Oura's workout resource, so nothing here is trimmed.
+
 ## Confirmed by the spec but not implemented
 
 These exist in the real API and were deliberately left out of this CLI's allowlist — noted here so a future change is a decision, not a rediscovery:
