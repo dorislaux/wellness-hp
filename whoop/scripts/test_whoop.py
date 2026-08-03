@@ -189,6 +189,16 @@ class TokenExchangeTests(unittest.TestCase):
             whoop.exchange_code(self.config, "auth-code", transport, now=1000.0)
         self.assertNotIn("client-secret", str(ctx.exception))
 
+    def test_non_json_error_body_surfaces_raw_text(self) -> None:
+        def transport(method, url, headers, body, timeout):
+            return whoop.HttpResponse(403, {}, b"Method Not Allowed")
+
+        with self.assertRaises(whoop.OAuthError) as ctx:
+            whoop.exchange_code(self.config, "auth-code", transport, now=1000.0)
+        message = str(ctx.exception)
+        self.assertIn("403", message)
+        self.assertIn("Method Not Allowed", message)
+
 
 class QueryValidationTests(unittest.TestCase):
     def test_unknown_resource_is_rejected(self) -> None:

@@ -406,6 +406,21 @@ def _json_object(body: bytes, context: str) -> dict[str, object]:
     return payload
 
 
+def _response_detail(body: bytes) -> str:
+    # A non-JSON or unrecognized-shape error body (an HTML block page, a plain-text
+    # message, a JSON shape this CLI doesn't know about) would otherwise be silently
+    # discarded, leaving only "HTTP <status>" with no way to tell what actually happened.
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return body[:300].decode("utf-8", errors="replace").strip()
+    if isinstance(payload, dict):
+        structured = _structured_error(payload)
+        if structured:
+            return structured
+    return body[:300].decode("utf-8", errors="replace").strip()
+
+
 def urllib_transport(
     method: str,
     url: str,
@@ -463,12 +478,10 @@ def _post_token_form(
         raise OAuthError("Could not reach the WHOOP token endpoint.") from exc
 
     if not 200 <= response.status < 300:
-        try:
-            payload = _json_object(response.body, "WHOOP token endpoint")
-            detail = _structured_error(payload)
-        except OAuthError:
-            detail = ""
-        message = detail or f"WHOOP token endpoint returned HTTP {response.status}."
+        message = f"WHOOP token endpoint returned HTTP {response.status}"
+        detail = _response_detail(response.body)
+        if detail:
+            message += f": {detail}"
         raise OAuthError(
             sanitize_error(
                 message,
@@ -801,11 +814,10 @@ class WhoopClient:
                     f"WHOOP authorization failed for profile {self.profile}; reauthorization is required."
                 )
         if not 200 <= response.status < 300:
-            try:
-                detail = _structured_error(_api_json(response))
-            except ApiError:
-                detail = ""
-            message = detail or f"WHOOP API returned HTTP {response.status}."
+            message = f"WHOOP API returned HTTP {response.status}"
+            detail = _response_detail(response.body)
+            if detail:
+                message += f": {detail}"
             raise ApiError(sanitize_error(message, self._secret_values()))
         return _api_json(response)
 
