@@ -185,6 +185,26 @@ def _line_chart(rows: list[dict], key: str, label: str, color: str) -> str:
     )
 
 
+def _average(rows: list[dict], key: str) -> float | None:
+    values = [row[key] for row in rows if row.get(key) is not None]
+    if not values:
+        return None
+    return sum(values) / len(values)
+
+
+def _stat_tile(label: str, value: float | None, unit: str) -> str:
+    # No per-tile accent color: these are three independent headline numbers, not
+    # comparable series, so there's no identity to color-code — text stays neutral
+    # per the usual "text never wears the data color" rule.
+    display = f"{value:.1f}{unit}" if value is not None else "—"
+    return (
+        '<div class="stat-tile">'
+        f'<div class="stat-label">{escape(label)}</div>'
+        f'<div class="stat-value">{escape(display)}</div>'
+        "</div>"
+    )
+
+
 PAGE_TEMPLATE = """<!doctype html>
 <html lang="en">
 <head>
@@ -196,10 +216,10 @@ PAGE_TEMPLATE = """<!doctype html>
   @media (prefers-color-scheme: light) {{
     body {{ background: #fafafa; color: #1a1a1a; }}
     table {{ background: #fff; }}
-    .card {{ background: #fff; border: 1px solid #e2e2e2; }}
+    .card, .stat-tile {{ background: #fff; border: 1px solid #e2e2e2; }}
   }}
   h1 {{ font-size: 1.4rem; margin-bottom: 0.25rem; }}
-  .meta {{ opacity: 0.7; margin-bottom: 2rem; font-size: 0.9rem; }}
+  .meta {{ opacity: 0.7; margin-bottom: 1.5rem; font-size: 0.9rem; }}
   .card {{ background: #16171d; border: 1px solid #2a2b33; border-radius: 10px;
            padding: 1.25rem 1.5rem; margin-bottom: 1.75rem; }}
   h2 {{ font-size: 1.1rem; margin-top: 0; }}
@@ -207,11 +227,23 @@ PAGE_TEMPLATE = """<!doctype html>
   th, td {{ text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid #2a2b33; }}
   th {{ opacity: 0.7; font-weight: 600; }}
   .empty {{ opacity: 0.6; font-style: italic; }}
+  .stat-bar {{ display: flex; gap: 1rem; margin-bottom: 1.75rem; }}
+  .stat-tile {{ flex: 1; background: #16171d; border: 1px solid #2a2b33; border-radius: 10px;
+                padding: 1rem 1.25rem; }}
+  .stat-label {{ opacity: 0.7; font-size: 0.8rem; margin-bottom: 0.35rem; }}
+  .stat-value {{ font-size: 1.6rem; font-weight: 600; }}
+  @media (max-width: 560px) {{
+    .stat-bar {{ flex-direction: column; }}
+  }}
 </style>
 </head>
 <body>
 <h1>WHOOP report</h1>
 <p class="meta">Profile: {profile} &middot; {start_date} to {end_date} &middot; generated locally, not uploaded anywhere</p>
+
+<div class="stat-bar">
+  {stat_bar}
+</div>
 
 <div class="card">
   <h2>Recovery</h2>
@@ -239,14 +271,31 @@ def build_html(profile: str, start_date: str, end_date: str, data: dict) -> str:
     sleep_rows = extract_sleep(data["sleep"])
     workout_rows = extract_workout(data["workout"])
 
+    stat_bar = "".join(
+        [
+            _stat_tile(
+                "Average resting heart rate",
+                _average(recovery_rows, "resting_heart_rate"),
+                " bpm",
+            ),
+            _stat_tile("Average HRV", _average(recovery_rows, "hrv_rmssd_milli"), " ms"),
+            _stat_tile(
+                "Average skin temperature",
+                _average(recovery_rows, "skin_temp_celsius"),
+                " °C",
+            ),
+        ]
+    )
+
     return PAGE_TEMPLATE.format(
         profile=escape(profile),
         start_date=escape(start_date),
         end_date=escape(end_date),
+        stat_bar=stat_bar,
         recovery_chart=_line_chart(recovery_rows, "recovery_score", "Recovery score", "#4c6ef5"),
         recovery_table=_table(
             recovery_rows,
-            ["date", "score_state", "recovery_score", "resting_heart_rate", "hrv_rmssd_milli", "skin_temp_celsius"],
+            ["date", "recovery_score", "resting_heart_rate", "hrv_rmssd_milli", "skin_temp_celsius"],
         ),
         sleep_chart=_line_chart(
             sleep_rows, "sleep_performance_percentage", "Sleep performance %", "#f76707"
@@ -254,16 +303,16 @@ def build_html(profile: str, start_date: str, end_date: str, data: dict) -> str:
         sleep_table=_table(
             sleep_rows,
             [
-                "date", "nap", "score_state",
+                "date", "nap",
                 "sleep_performance_percentage", "sleep_efficiency_percentage", "sleep_consistency_percentage",
             ],
         ),
         workout_table=_table(
             workout_rows,
             [
-                "date", "sport_name", "score_state", "strain", "average_heart_rate", "max_heart_rate",
-                "kilojoule", "percent_recorded", "distance_meter",
-                "altitude_gain_meter", "altitude_change_meter",
+                "date", "sport_name", "strain", "average_heart_rate", "max_heart_rate",
+                "kilojoule", "percent_recorded",
+                "altitude_change_meter",
                 "zone_zero_milli", "zone_one_milli", "zone_two_milli",
                 "zone_three_milli", "zone_four_milli", "zone_five_milli",
             ],

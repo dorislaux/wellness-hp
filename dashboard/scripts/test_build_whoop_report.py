@@ -135,6 +135,25 @@ class RenderingTests(unittest.TestCase):
         self.assertIn("<svg", html)
 
 
+class StatTileTests(unittest.TestCase):
+    def test_average_ignores_missing_values(self) -> None:
+        rows = [{"x": 10.0}, {"x": None}, {"x": 20.0}]
+        self.assertEqual(report._average(rows, "x"), 15.0)
+
+    def test_average_of_all_missing_is_none(self) -> None:
+        rows = [{"x": None}, {"x": None}]
+        self.assertIsNone(report._average(rows, "x"))
+
+    def test_stat_tile_renders_value_with_unit(self) -> None:
+        html = report._stat_tile("Average HRV", 45.23, " ms")
+        self.assertIn("Average HRV", html)
+        self.assertIn("45.2 ms", html)
+
+    def test_stat_tile_renders_dash_when_no_data(self) -> None:
+        html = report._stat_tile("Average HRV", None, " ms")
+        self.assertIn(">—<", html)
+
+
 class BuildHtmlIntegrationTests(unittest.TestCase):
     def test_full_report_contains_all_three_sections(self) -> None:
         data = {
@@ -155,6 +174,54 @@ class BuildHtmlIntegrationTests(unittest.TestCase):
         self.assertIn("Workout", html)
         self.assertIn("recovery_score", html)
         self.assertIn("No data in this range", html)  # sleep/workout tables are empty
+
+    def test_stat_bar_shows_averages_from_recovery_rows(self) -> None:
+        data = {
+            "recovery": [
+                {"created_at": "2026-07-28T00:00:00Z",
+                 "score": {"resting_heart_rate": 50.0, "hrv_rmssd_milli": 40.0, "skin_temp_celsius": 33.0}},
+                {"created_at": "2026-07-29T00:00:00Z",
+                 "score": {"resting_heart_rate": 60.0, "hrv_rmssd_milli": 50.0, "skin_temp_celsius": 34.0}},
+            ],
+            "sleep": [],
+            "workout": [],
+        }
+        html = report.build_html("default", "2026-07-27", "2026-08-03", data)
+        self.assertIn("55.0 bpm", html)
+        self.assertIn("45.0 ms", html)
+        self.assertIn("33.5", html)
+
+    def test_score_state_column_is_not_rendered_anywhere(self) -> None:
+        data = {
+            "recovery": [{"created_at": "2026-07-28T00:00:00Z", "score_state": "SCORED", "score": {}}],
+            "sleep": [{"start": "2026-07-28T00:00:00Z", "score_state": "SCORED", "score": {}}],
+            "workout": [{"start": "2026-07-28T00:00:00Z", "score_state": "SCORED", "score": {}}],
+        }
+        html = report.build_html("default", "2026-07-27", "2026-08-03", data)
+        self.assertNotIn(">score_state<", html)
+        self.assertNotIn(">SCORED<", html)
+
+    def test_workout_table_omits_null_distance_and_altitude_gain(self) -> None:
+        data = {
+            "recovery": [],
+            "sleep": [],
+            "workout": [
+                {
+                    "start": "2026-07-28T18:00:00Z",
+                    "sport_name": "weightlifting",
+                    "score": {
+                        "strain": 10.0,
+                        "distance_meter": None,
+                        "altitude_gain_meter": None,
+                        "altitude_change_meter": None,
+                    },
+                }
+            ],
+        }
+        html = report.build_html("default", "2026-07-27", "2026-08-03", data)
+        self.assertNotIn(">distance_meter<", html)
+        self.assertNotIn(">altitude_gain_meter<", html)
+        self.assertIn(">altitude_change_meter<", html)
 
 
 class FetchDataTests(unittest.TestCase):

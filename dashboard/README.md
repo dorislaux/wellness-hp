@@ -13,7 +13,11 @@ Requires the `whoop` skill to already be `configure`d and `authorize`d for the p
 Pulls only the fields decided in [`whoop/references/endpoints.md`](../whoop/references/endpoints.md#fields-selected-for-this-project):
 - **Recovery**: `recovery_score`, `resting_heart_rate`, `hrv_rmssd_milli`, `skin_temp_celsius`
 - **Sleep**: `sleep_performance_percentage`, `sleep_efficiency_percentage`, `sleep_consistency_percentage`
-- **Workout**: everything
+- **Workout**: everything (fetched in full; a couple of always-null columns are hidden from the table itself, see below)
+
+The page has a stat-tile row at the top (7-day-style averages of RHR, HRV, and skin temperature — actually averaged over whatever `--start-date`/`--end-date` range was requested, not hardcoded to 7 days), a Recovery card (line chart + table), a Sleep card (line chart + table), and a Workout card (table only — strain/HR/zones don't have a natural single-metric trend line the way recovery/sleep do).
+
+`score_state` is fetched but deliberately not shown in any table — it's WHOOP's internal "is this fully scored yet" flag, not something end users need to see. `distance_meter` and `altitude_gain_meter` are hidden from the workout table because WHOOP only populates them when GPS/altitude data was actually captured (confirmed null for weightlifting-style workouts without that data) — `altitude_change_meter` has the same caveat and is currently still shown; hide it too if it's consistently null for your workout types.
 
 Charts are hand-rolled inline SVG (no charting library, no CDN, nothing fetched at view time), plus a data table per section.
 
