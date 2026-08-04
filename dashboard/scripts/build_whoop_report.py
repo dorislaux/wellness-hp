@@ -55,27 +55,6 @@ def run_whoop(*args: str) -> dict:
         raise ReportError(f"whoop.py {' '.join(args)} returned non-JSON output.") from exc
 
 
-def fetch_data(profile: str, start_date: str, end_date: str) -> dict:
-    daily = run_whoop(
-        "daily",
-        "--profile", profile,
-        "--start-date", start_date,
-        "--end-date", end_date,
-    )
-    workouts = run_whoop(
-        "get", "workout",
-        "--profile", profile,
-        "--start-datetime", f"{start_date}T00:00:00.000Z",
-        "--end-datetime", f"{end_date}T23:59:59.999Z",
-        "--all-pages",
-    )
-    return {
-        "recovery": daily.get("recovery", []),
-        "sleep": daily.get("sleep", []),
-        "workout": workouts.get("data", []),
-    }
-
-
 def _previous_period(start_date: str, end_date: str) -> tuple[str, str]:
     start = date.fromisoformat(start_date)
     end = date.fromisoformat(end_date)
@@ -85,19 +64,55 @@ def _previous_period(start_date: str, end_date: str) -> tuple[str, str]:
     return previous_start.isoformat(), previous_end.isoformat()
 
 
-def fetch_previous_recovery(profile: str, start_date: str, end_date: str) -> list[dict]:
-    """Fetches recovery for the period immediately preceding, same length as the
-    requested range - so a comparison always means "vs the equivalent prior period",
-    not hardcoded to any specific number of days."""
-    previous_start, previous_end = _previous_period(start_date, end_date)
-    payload = run_whoop(
+def _recovery_record_date(record: dict) -> str:
+    return (record.get("created_at") or "")[:10]
+
+
+def fetch_report_data(profile: str, start_date: str, end_date: str) -> tuple[dict, list[dict]]:
+    """Fetches everything the report needs in three WHOOP API calls, not five.
+
+    Recovery is fetched once, spanning both the requested period and the
+    equal-length period immediately before it, then split client-side by date -
+    WHOOP's API only cares about the date range you ask for, so one wider range
+    plus a client-side split is strictly fewer round trips than fetching each
+    period separately. Sleep and workout are fetched only for the requested
+    period. Cycle is never fetched at all: nothing in this report displays it,
+    so the old daily-command-based fetch was pulling and discarding it for free.
+    """
+    previous_start, _ = _previous_period(start_date, end_date)
+
+    recovery_payload = run_whoop(
         "get", "recovery",
         "--profile", profile,
         "--start-datetime", f"{previous_start}T00:00:00.000Z",
-        "--end-datetime", f"{previous_end}T23:59:59.999Z",
+        "--end-datetime", f"{end_date}T23:59:59.999Z",
         "--all-pages",
     )
-    return payload.get("data", [])
+    all_recovery = recovery_payload.get("data", [])
+    current_recovery = [r for r in all_recovery if _recovery_record_date(r) >= start_date]
+    previous_recovery = [r for r in all_recovery if _recovery_record_date(r) < start_date]
+
+    sleep_payload = run_whoop(
+        "get", "sleep",
+        "--profile", profile,
+        "--start-datetime", f"{start_date}T00:00:00.000Z",
+        "--end-datetime", f"{end_date}T23:59:59.999Z",
+        "--all-pages",
+    )
+    workout_payload = run_whoop(
+        "get", "workout",
+        "--profile", profile,
+        "--start-datetime", f"{start_date}T00:00:00.000Z",
+        "--end-datetime", f"{end_date}T23:59:59.999Z",
+        "--all-pages",
+    )
+
+    data = {
+        "recovery": current_recovery,
+        "sleep": sleep_payload.get("data", []),
+        "workout": workout_payload.get("data", []),
+    }
+    return data, previous_recovery
 
 
 def extract_recovery(records: list[dict]) -> list[dict]:
@@ -535,21 +550,12 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        data = fetch_data(args.profile, args.start_date, args.end_date)
-    except ReportError as exc:
-        print(str(exc), file=sys.stderr)
-        return 1
-
-    try:
-        previous_recovery_records = fetch_previous_recovery(
+        data, previous_recovery_records = fetch_report_data(
             args.profile, args.start_date, args.end_date
         )
     except ReportError as exc:
-        print(
-            f"Warning: could not fetch previous-period data for comparison: {exc}",
-            file=sys.stderr,
-        )
-        previous_recovery_records = []
+        print(str(exc), file=sys.stderr)
+        return 1
 
     html = build_html(args.profile, args.start_date, args.end_date, data, previous_recovery_records)
 

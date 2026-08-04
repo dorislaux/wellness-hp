@@ -225,38 +225,6 @@ class BuildHtmlIntegrationTests(unittest.TestCase):
 
 
 class FetchDataTests(unittest.TestCase):
-    def test_fetch_data_calls_whoop_cli_with_expected_args(self) -> None:
-        daily_payload = {"recovery": [{"id": 1}], "sleep": [{"id": 2}]}
-        workout_payload = {"data": [{"id": 3}]}
-
-        calls = []
-
-        def fake_run(cmd, capture_output, text):
-            calls.append(cmd)
-            if "daily" in cmd:
-                stdout = json.dumps(daily_payload)
-            else:
-                stdout = json.dumps(workout_payload)
-            return type("R", (), {"returncode": 0, "stdout": stdout, "stderr": ""})()
-
-        with patch("subprocess.run", side_effect=fake_run):
-            result = report.fetch_data("default", "2026-07-27", "2026-08-03")
-
-        self.assertEqual(result["recovery"], [{"id": 1}])
-        self.assertEqual(result["sleep"], [{"id": 2}])
-        self.assertEqual(result["workout"], [{"id": 3}])
-        self.assertEqual(len(calls), 2)
-        self.assertIn("daily", calls[0])
-        self.assertIn("workout", calls[1])
-
-    def test_nonzero_exit_raises_report_error(self) -> None:
-        def fake_run(cmd, capture_output, text):
-            return type("R", (), {"returncode": 2, "stdout": "", "stderr": "not authorized"})()
-
-        with patch("subprocess.run", side_effect=fake_run):
-            with self.assertRaises(report.ReportError):
-                report.fetch_data("default", "2026-07-27", "2026-08-03")
-
     def test_previous_period_is_equal_length_and_immediately_before(self) -> None:
         # 2026-07-27..2026-08-03 is 8 days inclusive; previous period must also be
         # 8 days, ending the day before start (not hardcoded to 7 days anywhere).
@@ -264,20 +232,80 @@ class FetchDataTests(unittest.TestCase):
         self.assertEqual(previous_end, "2026-07-26")
         self.assertEqual(previous_start, "2026-07-19")
 
-    def test_fetch_previous_recovery_calls_get_recovery_with_computed_range(self) -> None:
+    def test_makes_exactly_three_calls_not_five(self) -> None:
+        # One recovery call spanning both periods, one sleep call, one workout call -
+        # no `daily` (which would also pull unused cycle data), no separate
+        # previous-period recovery call.
         calls = []
 
         def fake_run(cmd, capture_output, text):
             calls.append(cmd)
-            return type("R", (), {"returncode": 0, "stdout": json.dumps({"data": [{"id": 9}]}), "stderr": ""})()
+            return type("R", (), {"returncode": 0, "stdout": json.dumps({"data": []}), "stderr": ""})()
 
         with patch("subprocess.run", side_effect=fake_run):
-            result = report.fetch_previous_recovery("default", "2026-07-27", "2026-08-03")
+            report.fetch_report_data("default", "2026-07-27", "2026-08-03")
 
-        self.assertEqual(result, [{"id": 9}])
+        self.assertEqual(len(calls), 3)
+        self.assertNotIn("daily", [arg for call in calls for arg in call])
         self.assertIn("recovery", calls[0])
-        self.assertIn("2026-07-19T00:00:00.000Z", calls[0])
-        self.assertIn("2026-07-26T23:59:59.999Z", calls[0])
+        self.assertIn("sleep", calls[1])
+        self.assertIn("workout", calls[2])
+
+    def test_recovery_call_spans_from_previous_period_start_to_current_end(self) -> None:
+        calls = []
+
+        def fake_run(cmd, capture_output, text):
+            calls.append(cmd)
+            return type("R", (), {"returncode": 0, "stdout": json.dumps({"data": []}), "stderr": ""})()
+
+        with patch("subprocess.run", side_effect=fake_run):
+            report.fetch_report_data("default", "2026-07-27", "2026-08-03")
+
+        recovery_call = calls[0]
+        self.assertIn("2026-07-19T00:00:00.000Z", recovery_call)  # previous period start
+        self.assertIn("2026-08-03T23:59:59.999Z", recovery_call)  # current period end
+
+    def test_recovery_records_are_split_by_date_into_current_and_previous(self) -> None:
+        combined_recovery = {
+            "data": [
+                {"id": "prev-1", "created_at": "2026-07-20T00:00:00Z"},
+                {"id": "current-1", "created_at": "2026-07-28T00:00:00Z"},
+                {"id": "current-2", "created_at": "2026-08-03T00:00:00Z"},
+            ]
+        }
+
+        def fake_run(cmd, capture_output, text):
+            if "recovery" in cmd:
+                return type("R", (), {"returncode": 0, "stdout": json.dumps(combined_recovery), "stderr": ""})()
+            return type("R", (), {"returncode": 0, "stdout": json.dumps({"data": []}), "stderr": ""})()
+
+        with patch("subprocess.run", side_effect=fake_run):
+            data, previous_recovery = report.fetch_report_data("default", "2026-07-27", "2026-08-03")
+
+        self.assertEqual([r["id"] for r in data["recovery"]], ["current-1", "current-2"])
+        self.assertEqual([r["id"] for r in previous_recovery], ["prev-1"])
+
+    def test_sleep_and_workout_land_in_the_right_buckets(self) -> None:
+        def fake_run(cmd, capture_output, text):
+            if "sleep" in cmd:
+                return type("R", (), {"returncode": 0, "stdout": json.dumps({"data": [{"id": "s1"}]}), "stderr": ""})()
+            if "workout" in cmd:
+                return type("R", (), {"returncode": 0, "stdout": json.dumps({"data": [{"id": "w1"}]}), "stderr": ""})()
+            return type("R", (), {"returncode": 0, "stdout": json.dumps({"data": []}), "stderr": ""})()
+
+        with patch("subprocess.run", side_effect=fake_run):
+            data, _ = report.fetch_report_data("default", "2026-07-27", "2026-08-03")
+
+        self.assertEqual(data["sleep"], [{"id": "s1"}])
+        self.assertEqual(data["workout"], [{"id": "w1"}])
+
+    def test_nonzero_exit_raises_report_error(self) -> None:
+        def fake_run(cmd, capture_output, text):
+            return type("R", (), {"returncode": 2, "stdout": "", "stderr": "not authorized"})()
+
+        with patch("subprocess.run", side_effect=fake_run):
+            with self.assertRaises(report.ReportError):
+                report.fetch_report_data("default", "2026-07-27", "2026-08-03")
 
 
 class PercentFormatterTests(unittest.TestCase):

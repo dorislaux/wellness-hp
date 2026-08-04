@@ -10,6 +10,8 @@ python3 dashboard/scripts/build_whoop_report.py --start-date 2026-07-27 --end-da
 
 Requires the `whoop` skill to already be `configure`d and `authorize`d for the profile you're using (`--profile default` if omitted) — this script never touches OAuth itself, it only runs `whoop/scripts/whoop.py` as a subprocess and reads its JSON output. Writes to `dashboard/output/whoop-report.html` by default (`--output` to change it).
 
+Fetches in exactly three WHOOP API calls: recovery (one call spanning both the requested period and the equal-length period immediately before it, for the stat-tile deltas — split by date client-side, not two separate calls), sleep, and workout, all scoped to the requested range. No `daily` command and no cycle data at all — nothing in this report displays cycle, so fetching it would just be waste.
+
 Pulls only the fields decided in [`whoop/references/endpoints.md`](../whoop/references/endpoints.md#fields-selected-for-this-project):
 - **Recovery**: `recovery_score`, `resting_heart_rate`, `hrv_rmssd_milli`, `skin_temp_celsius`
 - **Sleep**: `sleep_performance_percentage`, `sleep_efficiency_percentage`, `sleep_consistency_percentage`
@@ -23,7 +25,7 @@ Charts are hand-rolled inline SVG (no charting library, no CDN, nothing fetched 
 
 ### Stat-tile deltas (period-over-period comparison)
 
-Each stat tile also fetches the immediately preceding period of equal length (e.g. requesting `2026-07-27` to `2026-08-03` also pulls `2026-07-19` to `2026-07-26` for comparison — one extra `get recovery` call, no extra OAuth or config) and shows the change, color-coded by whether that direction is actually good for that metric:
+Each stat tile compares against the immediately preceding period of equal length (e.g. requesting `2026-07-27` to `2026-08-03` also covers `2026-07-19` to `2026-07-26` for comparison) and shows the change, color-coded by whether that direction is actually good for that metric. This doesn't cost an extra API call: the single recovery fetch already spans both periods, split by date after the fact.
 
 - **RHR**: lower is better → a decrease is colored green ("improved"), an increase is orange ("worsened").
 - **HRV**: higher is better → the same colors, opposite direction.
