@@ -19,7 +19,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from typing import Callable, Mapping
+from typing import Callable, Mapping, Optional
 from urllib.parse import parse_qs, urlencode, urlparse
 import webbrowser
 
@@ -103,7 +103,7 @@ class HttpResponse:
 
 
 Transport = Callable[
-    [str, str, Mapping[str, str], bytes | None, float], HttpResponse
+    [str, str, Mapping[str, str], Optional[bytes], float], HttpResponse
 ]
 
 

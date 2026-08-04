@@ -18,7 +18,7 @@ import shlex
 import sys
 import tempfile
 import time
-from typing import Callable, Mapping
+from typing import Callable, Mapping, Optional
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlencode, urlparse
 from urllib.request import Request, urlopen
@@ -98,7 +98,7 @@ class HttpResponse:
 
 
 Transport = Callable[
-    [str, str, Mapping[str, str], bytes | None, float], HttpResponse
+    [str, str, Mapping[str, str], Optional[bytes], float], HttpResponse
 ]
 
 

@@ -10,7 +10,7 @@ This repo root is the Oura skill specifically. Other provider skills live as sib
 ## Requirements
 
 - macOS or Linux
-- Python 3.10 or newer
+- Python 3.8 or newer (no `bytes | None`-style runtime union syntax is used outside of annotations, so this doesn't require 3.10+ despite being written with `from __future__ import annotations`)
 - Git
 - An Oura account and an OAuth application in the [Oura developer portal](https://cloud.ouraring.com/oauth/applications)
 
