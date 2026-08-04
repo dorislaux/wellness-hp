@@ -328,6 +328,10 @@ def _average(rows: list[dict], key: str) -> float | None:
     return sum(values) / len(values)
 
 
+def _rows_for_date(rows: list[dict], target_date: str) -> list[dict]:
+    return [row for row in rows if row["date"] == target_date]
+
+
 def _stat_tile(
     label: str,
     value: float | None,
@@ -342,12 +346,16 @@ def _stat_tile(
 
     delta_html = ""
     if delta is not None:
-        arrow = "▲" if delta > 0 else ("▼" if delta < 0 else "→")
-        sign = "+" if delta > 0 else ""
+        # Base direction/judgment on the rounded (displayed) value, not the raw
+        # float - a delta of -0.03 displays as "-0.0" and calling that "improved"
+        # would contradict what the reader can actually see.
+        rounded = round(delta, 1)
+        arrow = "▲" if rounded > 0 else ("▼" if rounded < 0 else "→")
+        sign = "+" if rounded > 0 else ""
         color = None
         judgment = "vs previous period"
-        if good_direction in ("up", "down") and delta != 0:
-            is_good = delta > 0 if good_direction == "up" else delta < 0
+        if good_direction in ("up", "down") and rounded != 0:
+            is_good = rounded > 0 if good_direction == "up" else rounded < 0
             color = STATUS_GOOD if is_good else STATUS_SERIOUS
             judgment = "improved" if is_good else "worsened"
         text = f"{arrow} {sign}{delta:.1f}{unit} {judgment}".strip()
@@ -361,6 +369,175 @@ def _stat_tile(
         f"{delta_html}"
         "</div>"
     )
+
+
+# Client-side re-implementation of the day/week/month/year aggregation used by the
+# granularity filter. Ported from a version tested standalone under Node (date-bucketing
+# and calendar-rollover math is exactly the kind of thing that looks right and isn't -
+# see the commit message for the specific cases checked: Monday-anchored weeks grouping
+# Sunday with the *preceding* Monday, and month/year rollover at year boundaries).
+# No Python-side templating happens on this string - it's inserted as-is, so its own
+# braces don't need doubling.
+GRANULARITY_SCRIPT = """
+<script>
+(function () {
+  var REPORT_DATA = JSON.parse(document.getElementById('report-data').textContent);
+  var STATUS_GOOD = "#0ca30c";
+  var STATUS_SERIOUS = "#ec835a";
+  var PERIOD_LABEL = { day: "today", week: "this week", month: "this month", year: "this year" };
+
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function mondayOf(dateStr) {
+    var d = new Date(dateStr + "T00:00:00Z");
+    var day = d.getUTCDay(); // 0=Sun..6=Sat
+    var offset = (day + 6) % 7; // days since most recent Monday
+    d.setUTCDate(d.getUTCDate() - offset);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function bucketKey(dateStr, granularity) {
+    if (granularity === "day") return dateStr;
+    if (granularity === "week") return mondayOf(dateStr);
+    if (granularity === "month") return dateStr.slice(0, 7);
+    return dateStr.slice(0, 4);
+  }
+
+  function previousBucketKey(anchorDateStr, granularity) {
+    var d = new Date(anchorDateStr + "T00:00:00Z");
+    if (granularity === "day") {
+      d.setUTCDate(d.getUTCDate() - 1);
+      return d.toISOString().slice(0, 10);
+    }
+    if (granularity === "week") {
+      var monday = new Date(mondayOf(anchorDateStr) + "T00:00:00Z");
+      monday.setUTCDate(monday.getUTCDate() - 7);
+      return monday.toISOString().slice(0, 10);
+    }
+    if (granularity === "month") {
+      var year = d.getUTCFullYear();
+      var month = d.getUTCMonth() - 1; // 0-indexed
+      if (month < 0) { month = 11; year -= 1; }
+      return year + "-" + String(month + 1).padStart(2, "0");
+    }
+    return String(d.getUTCFullYear() - 1);
+  }
+
+  function average(values) {
+    var nonNull = values.filter(function (v) { return v !== null && v !== undefined; });
+    if (nonNull.length === 0) return null;
+    var sum = nonNull.reduce(function (a, b) { return a + b; }, 0);
+    return sum / nonNull.length;
+  }
+
+  function groupBy(rows, granularity) {
+    var buckets = {};
+    rows.forEach(function (row) {
+      var key = bucketKey(row.date, granularity);
+      (buckets[key] = buckets[key] || []).push(row);
+    });
+    return buckets;
+  }
+
+  function seriesFor(buckets, field) {
+    return Object.keys(buckets).sort().map(function (key) {
+      return { key: key, value: average(buckets[key].map(function (r) { return r[field]; })) };
+    }).filter(function (p) { return p.value !== null; });
+  }
+
+  function renderLineChart(containerId, points, label, color) {
+    var container = document.getElementById(containerId);
+    if (!points.length) {
+      container.innerHTML = '<p class="empty">No ' + escapeHtml(label) + ' data to chart.</p>';
+      return;
+    }
+    var width = 640, height = 160, padding = 28;
+    var plotW = width - 2 * padding;
+    var plotH = height - 2 * padding;
+    var values = points.map(function (p) { return p.value; });
+    var lo = Math.min.apply(null, values);
+    var hi = Math.max.apply(null, values);
+    var span = (hi - lo) || 1;
+    var step = plotW / Math.max(points.length - 1, 1);
+    var coords = points.map(function (p, i) {
+      var x = padding + i * step;
+      var y = padding + plotH - ((p.value - lo) / span) * plotH;
+      return [x, y];
+    });
+    var polyline = coords.map(function (c) { return c[0].toFixed(1) + "," + c[1].toFixed(1); }).join(" ");
+    var dots = points.map(function (p, i) {
+      var c = coords[i];
+      return '<circle cx="' + c[0].toFixed(1) + '" cy="' + c[1].toFixed(1) + '" r="3" fill="' + color + '">' +
+        '<title>' + escapeHtml(p.key) + ": " + p.value.toFixed(2) + '</title></circle>';
+    }).join("");
+    container.innerHTML = '<svg viewBox="0 0 ' + width + ' ' + height + '" width="100%" height="' + height +
+      '" role="img" aria-label="' + escapeHtml(label) + ' trend">' +
+      '<polyline fill="none" stroke="' + color + '" stroke-width="2" points="' + polyline + '" />' +
+      dots + '</svg>';
+  }
+
+  function renderStatTile(label, value, unit, delta, goodDirection) {
+    var display = value === null ? "—" : value.toFixed(1) + unit;
+    var deltaHtml = "";
+    if (delta !== null) {
+      // Base direction/judgment on the rounded (displayed) value, not the raw
+      // float - see the matching comment in _stat_tile in the Python source.
+      var rounded = parseFloat(delta.toFixed(1));
+      var arrow = rounded > 0 ? "▲" : (rounded < 0 ? "▼" : "→");
+      var sign = rounded > 0 ? "+" : "";
+      var color = null;
+      var judgment = "vs previous period";
+      if ((goodDirection === "up" || goodDirection === "down") && rounded !== 0) {
+        var isGood = goodDirection === "up" ? rounded > 0 : rounded < 0;
+        color = isGood ? STATUS_GOOD : STATUS_SERIOUS;
+        judgment = isGood ? "improved" : "worsened";
+      }
+      var text = arrow + " " + sign + delta.toFixed(1) + unit + " " + judgment;
+      var style = color ? ' style="color:' + color + '"' : "";
+      deltaHtml = '<div class="stat-delta"' + style + '>' + escapeHtml(text) + '</div>';
+    }
+    return '<div class="stat-tile"><div class="stat-label">' + escapeHtml(label) + '</div>' +
+      '<div class="stat-value">' + escapeHtml(display) + '</div>' + deltaHtml + '</div>';
+  }
+
+  window.wellnessApplyGranularity = function (granularity) {
+    var recoveryBuckets = groupBy(REPORT_DATA.recovery, granularity);
+    var sleepBuckets = groupBy(REPORT_DATA.sleep, granularity);
+
+    renderLineChart("recovery-chart", seriesFor(recoveryBuckets, "recovery_score"), "Recovery score", "#4c6ef5");
+    renderLineChart("sleep-chart", seriesFor(sleepBuckets, "sleep_performance_percentage"), "Sleep performance %", "#f76707");
+
+    var currentKey = bucketKey(REPORT_DATA.anchor_date, granularity);
+    var previousKey = previousBucketKey(REPORT_DATA.anchor_date, granularity);
+    var currentRows = recoveryBuckets[currentKey] || [];
+    var previousRows = recoveryBuckets[previousKey] || [];
+    var periodLabel = PERIOD_LABEL[granularity] || granularity;
+
+    function statFor(field) {
+      var current = average(currentRows.map(function (r) { return r[field]; }));
+      var previous = average(previousRows.map(function (r) { return r[field]; }));
+      var delta = (current !== null && previous !== null) ? current - previous : null;
+      return { current: current, delta: delta };
+    }
+
+    var rhr = statFor("resting_heart_rate");
+    var hrv = statFor("hrv_rmssd_milli");
+    var skinTemp = statFor("skin_temp_celsius");
+
+    document.getElementById("stat-bar").innerHTML =
+      renderStatTile("Resting heart rate — " + periodLabel, rhr.current, " bpm", rhr.delta, "down") +
+      renderStatTile("HRV — " + periodLabel, hrv.current, " ms", hrv.delta, "up") +
+      renderStatTile("Skin temperature — " + periodLabel, skinTemp.current, " °C", skinTemp.delta, null);
+  };
+})();
+</script>
+"""
 
 
 PAGE_TEMPLATE = """<!doctype html>
@@ -420,19 +597,29 @@ PAGE_TEMPLATE = """<!doctype html>
 <h1>WHOOP report</h1>
 <p class="meta">Profile: {profile} &middot; {start_date} to {end_date} &middot; generated locally, not uploaded anywhere</p>
 
-<div class="stat-bar">
+<div class="filter-row">
+  <label for="granularity-filter">View by</label>
+  <select id="granularity-filter" onchange="wellnessApplyGranularity(this.value)">
+    <option value="day" selected>Day</option>
+    <option value="week">Week (Mon&ndash;Sun)</option>
+    <option value="month">Month</option>
+    <option value="year">Year</option>
+  </select>
+</div>
+
+<div class="stat-bar" id="stat-bar">
   {stat_bar}
 </div>
 
 <div class="card">
   <h2>Recovery</h2>
-  {recovery_chart}
+  <div id="recovery-chart">{recovery_chart}</div>
   {recovery_table}
 </div>
 
 <div class="card">
   <h2>Sleep</h2>
-  {sleep_chart}
+  <div id="sleep-chart">{sleep_chart}</div>
   {sleep_table}
 </div>
 
@@ -442,6 +629,9 @@ PAGE_TEMPLATE = """<!doctype html>
   {workout_table}
   {zone_legend}
 </div>
+
+<script type="application/json" id="report-data">{report_data_json}</script>
+{granularity_script}
 </body>
 </html>
 """
@@ -458,10 +648,22 @@ def build_html(
     sleep_rows = extract_sleep(data["sleep"])
     workout_rows = extract_workout(data["workout"])
     previous_rows = extract_recovery(previous_recovery_records or [])
+    # Chart and the granularity filter both draw from the full fetched history
+    # (current + comparison period), not just the requested range - it's already
+    # fetched, so showing it is free and makes the "week/month/year" filter views
+    # meaningfully less sparse. The recovery *table* stays current-period-only.
+    all_recovery_rows = sorted(previous_rows + recovery_rows, key=lambda row: row["date"])
+
+    # Initial ("day" granularity, works with no JS) stat bar: today vs yesterday -
+    # this matches what wellnessApplyGranularity("day") would compute client-side,
+    # so re-selecting "Day" after switching away doesn't visibly change anything.
+    previous_day = (date.fromisoformat(end_date) - timedelta(days=1)).isoformat()
+    current_day_rows = _rows_for_date(all_recovery_rows, end_date)
+    previous_day_rows = _rows_for_date(all_recovery_rows, previous_day)
 
     def delta_for(key: str) -> float | None:
-        current = _average(recovery_rows, key)
-        previous = _average(previous_rows, key)
+        current = _average(current_day_rows, key)
+        previous = _average(previous_day_rows, key)
         if current is None or previous is None:
             return None
         return current - previous
@@ -469,22 +671,22 @@ def build_html(
     stat_bar = "".join(
         [
             _stat_tile(
-                "Average resting heart rate",
-                _average(recovery_rows, "resting_heart_rate"),
+                "Resting heart rate — today",
+                _average(current_day_rows, "resting_heart_rate"),
                 " bpm",
                 delta=delta_for("resting_heart_rate"),
                 good_direction="down",
             ),
             _stat_tile(
-                "Average HRV",
-                _average(recovery_rows, "hrv_rmssd_milli"),
+                "HRV — today",
+                _average(current_day_rows, "hrv_rmssd_milli"),
                 " ms",
                 delta=delta_for("hrv_rmssd_milli"),
                 good_direction="up",
             ),
             _stat_tile(
-                "Average skin temperature",
-                _average(recovery_rows, "skin_temp_celsius"),
+                "Skin temperature — today",
+                _average(current_day_rows, "skin_temp_celsius"),
                 " °C",
                 delta=delta_for("skin_temp_celsius"),
                 good_direction=None,  # no established "higher/lower is better" for this
@@ -492,12 +694,18 @@ def build_html(
         ]
     )
 
+    report_data_json = json.dumps(
+        {"anchor_date": end_date, "recovery": all_recovery_rows, "sleep": sleep_rows}
+    ).replace("</", "<\\/")  # defensive: a value containing "</script>" can't break out of the tag
+
     return PAGE_TEMPLATE.format(
         profile=escape(profile),
         start_date=escape(start_date),
         end_date=escape(end_date),
         stat_bar=stat_bar,
-        recovery_chart=_line_chart(recovery_rows, "recovery_score", "Recovery score", "#4c6ef5"),
+        report_data_json=report_data_json,
+        granularity_script=GRANULARITY_SCRIPT,
+        recovery_chart=_line_chart(all_recovery_rows, "recovery_score", "Recovery score", "#4c6ef5"),
         recovery_table=_table(
             recovery_rows,
             ["date", "recovery_score", "resting_heart_rate", "hrv_rmssd_milli", "skin_temp_celsius"],

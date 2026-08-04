@@ -17,21 +17,32 @@ Pulls only the fields decided in [`whoop/references/endpoints.md`](../whoop/refe
 - **Sleep**: `sleep_performance_percentage`, `sleep_efficiency_percentage`, `sleep_consistency_percentage`
 - **Workout**: everything (fetched in full; a couple of always-null columns are hidden from the table itself, see below)
 
-The page has a stat-tile row at the top (averages of RHR, HRV, and skin temperature over whatever `--start-date`/`--end-date` range was requested — not hardcoded to 7 days, though that's the typical usage), a Recovery card (line chart + table), a Sleep card (line chart + table), and a Workout card (a sport filter, a table, and a zone-effort legend).
+The page has a **View by** dropdown (Day/Week/Month/Year), a stat-tile row (RHR/HRV/skin temperature for whatever's currently selected), a Recovery card (line chart + table), a Sleep card (line chart + table), and a Workout card (a sport filter, a table, and a zone-effort legend).
 
 `score_state` is fetched but deliberately not shown in any table — it's WHOOP's internal "is this fully scored yet" flag, not something end users need to see. `distance_meter` and `altitude_gain_meter` are hidden from the workout table because WHOOP only populates them when GPS/altitude data was actually captured (confirmed null for weightlifting-style workouts without that data) — `altitude_change_meter` has the same caveat and is currently still shown; hide it too if it's consistently null for your workout types.
 
 Charts are hand-rolled inline SVG (no charting library, no CDN, nothing fetched at view time), plus a data table per section.
 
+### View by: Day / Week / Month / Year
+
+The dropdown re-aggregates the stat tiles and both line charts entirely client-side (a small inline script, no server, no refetch) — switching it doesn't touch the network. **Weeks run Monday through Sunday.** Whichever granularity is selected:
+
+- The **stat tiles** show the average for the *current* bucket (today / this week / this month / this year — anchored to the report's `--end-date`, not your browser's clock, so a report opened days after it was generated still means what it meant when generated) compared against the immediately preceding bucket of the same kind (yesterday / last week / last calendar month / last calendar year — real calendar boundaries, e.g. the "previous bucket" for January is December of the *prior* year, not "31 days back").
+- The **charts** re-bucket every fetched recovery/sleep day into that granularity and plot one point per bucket. Week/month/year views are only as populated as the data actually fetched supports — if you only ask for a week of dates, the "Month" and "Year" views will have very few points. There's no live re-fetching once the file is generated; the filter reshapes what's already there, it doesn't fetch more.
+- **This changed the default "Day" view too**, not just the new granularities: the stat tiles now show *today's* single-day value (compared to yesterday), not an average across the whole requested range like before. The Recovery chart also now plots the comparison period's days in addition to the requested range (that data was already being fetched for the delta; previously it just wasn't drawn) — so "Day" shows more history than it used to.
+- The **tables and the Workout section are unaffected by this filter** — they always show full daily/per-workout detail regardless of what's selected up top. Only the stat bar and the two line charts respond to it.
+
+Page loads in the "Day" state pre-rendered by Python (works even with JavaScript disabled); the dropdown only takes over once you actually change it, and reuses the exact same markup/CSS classes so there's no visual jump between the two.
+
 ### Stat-tile deltas (period-over-period comparison)
 
-Each stat tile compares against the immediately preceding period of equal length (e.g. requesting `2026-07-27` to `2026-08-03` also covers `2026-07-19` to `2026-07-26` for comparison) and shows the change, color-coded by whether that direction is actually good for that metric. This doesn't cost an extra API call: the single recovery fetch already spans both periods, split by date after the fact.
+Each stat tile's delta is colored by whether that direction is actually good for the specific metric, not a generic up-good/down-bad assumption:
 
 - **RHR**: lower is better → a decrease is colored green ("improved"), an increase is orange ("worsened").
 - **HRV**: higher is better → the same colors, opposite direction.
 - **Skin temperature**: shown with no color judgment at all, deliberately. There's no established "higher is always better" or "lower is always better" for skin temperature — a deviation in either direction can just mean normal variation, or could be a signal worth attention. Color-coding it green/orange would be asserting a health claim this project has no basis for. The delta number is still shown, just neutral.
 
-Colors are the dataviz skill's reserved status tokens (`#0ca30c` good / `#ec835a` serious), never used as the categorical/chart palette, and always paired with a direction arrow and a word ("improved"/"worsened") — never color alone. If the previous period has no data (e.g. account too new), the delta line simply doesn't render for that tile; the report doesn't fail.
+Colors are the dataviz skill's reserved status tokens (`#0ca30c` good / `#ec835a` serious), never used as the categorical/chart palette, and always paired with a direction arrow and a word ("improved"/"worsened") — never color alone. Direction/color is based on the *rounded, displayed* value, not the raw float — a delta of -0.03 displays as "-0.0" and would read as a false "improved"/"worsened" claim otherwise. If the comparison bucket has no data (e.g. account too new, or the fetched range doesn't reach back far enough for the selected granularity), the delta line simply doesn't render for that tile; the report doesn't fail.
 
 ### Zone breakdown
 

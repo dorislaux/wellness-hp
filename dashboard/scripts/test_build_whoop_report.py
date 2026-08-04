@@ -15,6 +15,17 @@ sys.modules[SPEC.name] = report
 SPEC.loader.exec_module(report)
 
 
+def stat_bar_html(html: str) -> str:
+    """The page now embeds the granularity-filter JS source as page text, and that
+    source contains string literals ("stat-delta", "recovery_score", "improved", ...)
+    that collide with plain substring checks meant to test *rendered* output. Tests
+    that care specifically about the pre-rendered stat bar must scope to this slice,
+    not the whole page, or they'd pass even if the actual rendered stat bar were wrong."""
+    start = html.index('<div class="stat-bar" id="stat-bar">')
+    end = html.index('<div class="card">', start)
+    return html[start:end]
+
+
 class ExtractionTests(unittest.TestCase):
     def test_extract_recovery_pulls_only_selected_fields(self) -> None:
         records = [
@@ -172,24 +183,31 @@ class BuildHtmlIntegrationTests(unittest.TestCase):
         self.assertIn("Recovery", html)
         self.assertIn("Sleep", html)
         self.assertIn("Workout", html)
-        self.assertIn("recovery_score", html)
+        self.assertIn(">recovery_score<", html)  # table header specifically, not just JS source text
         self.assertIn("No data in this range", html)  # sleep/workout tables are empty
 
-    def test_stat_bar_shows_averages_from_recovery_rows(self) -> None:
+    def test_stat_bar_shows_todays_average(self) -> None:
+        # "Today" = the report's end_date (the anchor for the default "day" view).
+        # Two records on that same date should average together; a record on a
+        # different date must not be pulled into "today"'s number.
         data = {
             "recovery": [
-                {"created_at": "2026-07-28T00:00:00Z",
+                {"created_at": "2026-08-03T00:00:00Z",
                  "score": {"resting_heart_rate": 50.0, "hrv_rmssd_milli": 40.0, "skin_temp_celsius": 33.0}},
-                {"created_at": "2026-07-29T00:00:00Z",
+                {"created_at": "2026-08-03T12:00:00Z",
                  "score": {"resting_heart_rate": 60.0, "hrv_rmssd_milli": 50.0, "skin_temp_celsius": 34.0}},
+                {"created_at": "2026-07-20T00:00:00Z",  # a different day - must not be averaged in
+                 "score": {"resting_heart_rate": 999.0, "hrv_rmssd_milli": 999.0, "skin_temp_celsius": 999.0}},
             ],
             "sleep": [],
             "workout": [],
         }
-        html = report.build_html("default", "2026-07-27", "2026-08-03", data)
-        self.assertIn("55.0 bpm", html)
-        self.assertIn("45.0 ms", html)
-        self.assertIn("33.5", html)
+        bar = stat_bar_html(report.build_html("default", "2026-07-27", "2026-08-03", data))
+        self.assertIn("55.0 bpm", bar)
+        self.assertIn("45.0 ms", bar)
+        self.assertIn("33.5", bar)
+        self.assertIn("today", bar)
+        self.assertNotIn("999.0", bar)
 
     def test_score_state_column_is_not_rendered_anywhere(self) -> None:
         data = {
@@ -395,6 +413,16 @@ class StatTileDeltaTests(unittest.TestCase):
         self.assertNotIn(report.STATUS_GOOD, html)
         self.assertNotIn(report.STATUS_SERIOUS, html)
 
+    def test_near_zero_delta_that_displays_as_zero_is_neutral(self) -> None:
+        # -0.03 displays as "-0.0" at 1 decimal place; calling that "improved" would
+        # contradict what the reader can actually see, so it must be judged neutral.
+        html = report._stat_tile("RHR", 50.0, " bpm", delta=-0.03, good_direction="down")
+        self.assertNotIn(report.STATUS_GOOD, html)
+        self.assertNotIn(report.STATUS_SERIOUS, html)
+        self.assertIn("vs previous period", html)
+        self.assertIn("→", html)
+        self.assertNotIn("▼", html)
+
     def test_no_delta_renders_no_delta_block_at_all(self) -> None:
         html = report._stat_tile("RHR", 50.0, " bpm")
         self.assertNotIn('class="stat-delta"', html)
@@ -402,31 +430,81 @@ class StatTileDeltaTests(unittest.TestCase):
 
 class BuildHtmlDeltaIntegrationTests(unittest.TestCase):
     def test_report_shows_deltas_when_previous_period_available(self) -> None:
+        # Current = the report's end_date ("today"); previous = the day before -
+        # matching the default "day" granularity's today-vs-yesterday comparison.
         data = {
             "recovery": [
-                {"created_at": "2026-07-28T00:00:00Z",
+                {"created_at": "2026-08-03T00:00:00Z",
                  "score": {"resting_heart_rate": 50.0, "hrv_rmssd_milli": 50.0, "skin_temp_celsius": 33.5}},
             ],
             "sleep": [],
             "workout": [],
         }
         previous = [
-            {"created_at": "2026-07-20T00:00:00Z",
+            {"created_at": "2026-08-02T00:00:00Z",
              "score": {"resting_heart_rate": 55.0, "hrv_rmssd_milli": 45.0, "skin_temp_celsius": 33.3}},
         ]
-        html = report.build_html("default", "2026-07-27", "2026-08-03", data, previous)
-        self.assertIn("improved", html)  # both RHR (down) and HRV (up) moved the good way
+        bar = stat_bar_html(report.build_html("default", "2026-07-27", "2026-08-03", data, previous))
+        self.assertIn("improved", bar)  # both RHR (down) and HRV (up) moved the good way
 
     def test_report_has_no_delta_when_previous_period_missing(self) -> None:
         data = {
             "recovery": [
-                {"created_at": "2026-07-28T00:00:00Z", "score": {"resting_heart_rate": 50.0}},
+                {"created_at": "2026-08-03T00:00:00Z", "score": {"resting_heart_rate": 50.0}},
             ],
             "sleep": [],
             "workout": [],
         }
-        html = report.build_html("default", "2026-07-27", "2026-08-03", data, None)
-        self.assertNotIn('class="stat-delta"', html)
+        bar = stat_bar_html(report.build_html("default", "2026-07-27", "2026-08-03", data, None))
+        self.assertNotIn('class="stat-delta"', bar)
+        self.assertIn("50.0 bpm", bar)  # today's value still shows, just no comparison
+
+
+class GranularityFilterTests(unittest.TestCase):
+    def _build(self) -> str:
+        data = {
+            "recovery": [
+                {"created_at": "2026-08-03T00:00:00Z",
+                 "score": {"recovery_score": 60.0, "resting_heart_rate": 50.0,
+                           "hrv_rmssd_milli": 45.0, "skin_temp_celsius": 33.5}},
+            ],
+            "sleep": [
+                {"start": "2026-08-03T23:00:00Z", "score": {"sleep_performance_percentage": 88.0}},
+            ],
+            "workout": [],
+        }
+        previous = [
+            {"created_at": "2026-07-20T00:00:00Z",
+             "score": {"recovery_score": 55.0, "resting_heart_rate": 55.0,
+                       "hrv_rmssd_milli": 40.0, "skin_temp_celsius": 33.2}},
+        ]
+        return report.build_html("default", "2026-07-27", "2026-08-03", data, previous)
+
+    def test_dropdown_has_all_four_granularities_defaulting_to_day(self) -> None:
+        html = self._build()
+        self.assertIn('<option value="day" selected>Day</option>', html)
+        self.assertIn('<option value="week">', html)
+        self.assertIn('<option value="month">', html)
+        self.assertIn('<option value="year">', html)
+        self.assertIn("wellnessApplyGranularity", html)
+
+    def test_embedded_json_has_anchor_date_and_combined_recovery(self) -> None:
+        html = self._build()
+        match = html[html.index('id="report-data">') + len('id="report-data">'): html.index("</script>", html.index('id="report-data">'))]
+        payload = json.loads(match)
+        self.assertEqual(payload["anchor_date"], "2026-08-03")
+        # Both the current-period and comparison-period recovery rows are present,
+        # since the filter needs the full fetched history to bucket by week/month/year.
+        dates = [row["date"] for row in payload["recovery"]]
+        self.assertIn("2026-08-03", dates)
+        self.assertIn("2026-07-20", dates)
+        self.assertEqual([row["date"] for row in payload["sleep"]], ["2026-08-03"])
+
+    def test_recovery_chart_includes_previous_period_days(self) -> None:
+        # The chart draws from the combined dataset now, not just the current range -
+        # a deliberate change from before this feature, documented in the README.
+        html = self._build()
+        self.assertIn("2026-07-20: 55.00", html)
 
 
 if __name__ == "__main__":
