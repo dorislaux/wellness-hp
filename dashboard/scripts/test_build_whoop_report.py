@@ -197,6 +197,27 @@ class ChartAxisAndInteractivityTests(unittest.TestCase):
         self.assertNotIn("chart-axis-label", html)
         self.assertNotIn("chart-hit-area", html)
 
+    def test_few_points_use_the_base_chart_width(self) -> None:
+        html = report._line_chart(self._rows(), "x", "X", "#000")
+        self.assertIn(f'viewBox="0 0 {report.BASE_CHART_WIDTH} 180"', html)
+
+    def test_many_points_grow_the_chart_so_points_stay_resolvable(self) -> None:
+        # A year of daily points at the old fixed 640px width would land well
+        # under a pixel apart - unreachable/unreliable for a mouse. The chart
+        # should widen instead of letting points collide.
+        rows = [{"date": f"2026-{(i % 12) + 1:02d}-{(i % 28) + 1:02d}", "x": float(i % 100)} for i in range(366)]
+        html = report._line_chart(rows, "x", "X", "#000")
+        expected_width = report.MIN_POINT_GAP * (len(rows) - 1) + 44 + 16
+        self.assertIn(f'viewBox="0 0 {expected_width} 180"', html)
+        self.assertGreater(expected_width, report.BASE_CHART_WIDTH)
+        # Every point stays exactly MIN_POINT_GAP apart, not compressed.
+        self.assertIn('class="chart-scroll"', html)
+
+    def test_wide_chart_is_wrapped_in_a_scrollable_container(self) -> None:
+        html = report._line_chart(self._rows(), "x", "X", "#000")
+        self.assertTrue(html.startswith('<div class="chart-scroll">'))
+        self.assertTrue(html.endswith("</svg></div>"))
+
 
 class TrimZerosTests(unittest.TestCase):
     def test_whole_number_loses_the_decimal_entirely(self) -> None:

@@ -311,6 +311,16 @@ def _axis_label_anchor(index: int, count: int) -> str:
     return "middle"
 
 
+# Below this many points, a point is closer than a screen pixel apart on a
+# fixed-width chart and the pointer physically can't resolve one from the
+# next - the crosshair looks "laggy" and only a handful of points are
+# reachable at all. MIN_POINT_GAP keeps every point at least that many CSS
+# pixels apart by growing the chart instead, with the container scrolling
+# horizontally once it's wider than its card.
+MIN_POINT_GAP = 4
+BASE_CHART_WIDTH = 640
+
+
 def _line_chart(
     rows: list[dict], key: str, label: str, color: str, *, trim: bool = False
 ) -> str:
@@ -318,9 +328,11 @@ def _line_chart(
     if not points:
         return f'<p class="empty">No {escape(label)} data to chart.</p>'
 
-    width, height = 640, 180
+    height = 180
     pad_left, pad_right, pad_top, pad_bottom = 44, 16, 16, 32
-    plot_w = width - pad_left - pad_right
+    base_plot_w = BASE_CHART_WIDTH - pad_left - pad_right
+    plot_w = max(base_plot_w, (len(points) - 1) * MIN_POINT_GAP)
+    width = plot_w + pad_left + pad_right
     plot_h = height - pad_top - pad_bottom
     values = [value for _, value in points]
     lo, hi = min(values), max(values)
@@ -386,11 +398,13 @@ def _line_chart(
     )
 
     return (
-        f'<svg class="chart-svg" viewBox="0 0 {width} {height}" width="100%" '
+        '<div class="chart-scroll">'
+        f'<svg class="chart-svg" viewBox="0 0 {width} {height}" width="{width}" '
         f'height="{height}" role="img" aria-label="{escape(label)} trend">'
         f"{gridlines}{x_labels}"
         f'<polyline fill="none" stroke="{color}" stroke-width="2" points="{polyline}" />'
         f"{dots}{hit_area}{crosshair}</svg>"
+        "</div>"
     )
 
 
@@ -551,9 +565,14 @@ GRANULARITY_SCRIPT = """
       container.innerHTML = '<p class="empty">No ' + escapeHtml(label) + ' data to chart.</p>';
       return;
     }
-    var width = 640, height = 180;
+    var height = 180;
     var padLeft = 44, padRight = 16, padTop = 16, padBottom = 32;
-    var plotW = width - padLeft - padRight;
+    // Mirrors MIN_POINT_GAP/BASE_CHART_WIDTH in the Python source: keep every
+    // point at least 4px apart by growing the chart, rather than letting a
+    // dense range (e.g. a year of daily points) crush them sub-pixel.
+    var basePlotW = 640 - padLeft - padRight;
+    var plotW = Math.max(basePlotW, (points.length - 1) * 4);
+    var width = plotW + padLeft + padRight;
     var plotH = height - padTop - padBottom;
     var values = points.map(function (p) { return p.value; });
     var lo = Math.min.apply(null, values);
@@ -608,11 +627,11 @@ GRANULARITY_SCRIPT = """
       '<g class="chart-tooltip"><rect class="chart-tooltip-bg" />' +
       '<text class="chart-tooltip-date"></text><text class="chart-tooltip-value"></text></g></g>';
 
-    container.innerHTML = '<svg class="chart-svg" viewBox="0 0 ' + width + ' ' + height + '" width="100%" height="' + height +
-      '" role="img" aria-label="' + escapeHtml(label) + ' trend">' +
+    container.innerHTML = '<div class="chart-scroll"><svg class="chart-svg" viewBox="0 0 ' + width + ' ' + height +
+      '" width="' + width + '" height="' + height + '" role="img" aria-label="' + escapeHtml(label) + ' trend">' +
       gridlines + xLabels +
       '<polyline fill="none" stroke="' + color + '" stroke-width="2" points="' + polyline + '" />' +
-      dots + hitArea + crosshair + '</svg>';
+      dots + hitArea + crosshair + '</svg></div>';
   }
 
   // Generic crosshair + tooltip layer, shared by both the Python-rendered
@@ -678,14 +697,37 @@ GRANULARITY_SCRIPT = """
       return (evt.clientX - rect.left) * scale;
     }
 
+    // Pointermove can fire far more often than the screen repaints (some
+    // mice/trackpads report well past 60/sec). Doing a full DOM update on
+    // every single event is what reads as "laggy" - coalesce to one update
+    // per animation frame, and skip the write entirely if the pointer moved
+    // without crossing into a new point's territory.
+    var shown = points[points.length - 1];
+    var pendingEvt = null;
+    var frameQueued = false;
+
+    function flush() {
+      frameQueued = false;
+      var next = nearestPoint(svgXFromEvent(pendingEvt));
+      if (next !== shown) {
+        shown = next;
+        showAt(next);
+      }
+    }
+
     hitArea.addEventListener("pointermove", function (evt) {
-      showAt(nearestPoint(svgXFromEvent(evt)));
+      pendingEvt = evt;
+      if (!frameQueued) {
+        frameQueued = true;
+        requestAnimationFrame(flush);
+      }
     });
     hitArea.addEventListener("pointerleave", function () {
-      showAt(points[points.length - 1]);
+      shown = points[points.length - 1];
+      showAt(shown);
     });
 
-    showAt(points[points.length - 1]);
+    showAt(shown);
   }
 
   function renderStatTile(label, value, unit, delta, goodDirection, trim) {
@@ -811,7 +853,8 @@ PAGE_TEMPLATE = """<!doctype html>
                             padding: 0.25rem 0; user-select: none; }}
   .detail-toggle summary:hover {{ opacity: 1; }}
   .detail-toggle[open] summary {{ margin-bottom: 0.25rem; }}
-  .chart-svg {{ overflow: visible; }}
+  .chart-scroll {{ overflow-x: auto; -webkit-overflow-scrolling: touch; }}
+  .chart-svg {{ overflow: visible; display: block; }}
   .chart-gridline {{ stroke: currentColor; stroke-opacity: 0.12; stroke-width: 1; }}
   .chart-axis-label {{ font-size: 9px; fill: currentColor; opacity: 0.55; }}
   .chart-hit-area {{ cursor: crosshair; }}
