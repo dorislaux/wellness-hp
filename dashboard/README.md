@@ -15,11 +15,29 @@ Pulls only the fields decided in [`whoop/references/endpoints.md`](../whoop/refe
 - **Sleep**: `sleep_performance_percentage`, `sleep_efficiency_percentage`, `sleep_consistency_percentage`
 - **Workout**: everything (fetched in full; a couple of always-null columns are hidden from the table itself, see below)
 
-The page has a stat-tile row at the top (7-day-style averages of RHR, HRV, and skin temperature — actually averaged over whatever `--start-date`/`--end-date` range was requested, not hardcoded to 7 days), a Recovery card (line chart + table), a Sleep card (line chart + table), and a Workout card (table only — strain/HR/zones don't have a natural single-metric trend line the way recovery/sleep do).
+The page has a stat-tile row at the top (averages of RHR, HRV, and skin temperature over whatever `--start-date`/`--end-date` range was requested — not hardcoded to 7 days, though that's the typical usage), a Recovery card (line chart + table), a Sleep card (line chart + table), and a Workout card (a sport filter, a table, and a zone-effort legend).
 
 `score_state` is fetched but deliberately not shown in any table — it's WHOOP's internal "is this fully scored yet" flag, not something end users need to see. `distance_meter` and `altitude_gain_meter` are hidden from the workout table because WHOOP only populates them when GPS/altitude data was actually captured (confirmed null for weightlifting-style workouts without that data) — `altitude_change_meter` has the same caveat and is currently still shown; hide it too if it's consistently null for your workout types.
 
 Charts are hand-rolled inline SVG (no charting library, no CDN, nothing fetched at view time), plus a data table per section.
+
+### Stat-tile deltas (period-over-period comparison)
+
+Each stat tile also fetches the immediately preceding period of equal length (e.g. requesting `2026-07-27` to `2026-08-03` also pulls `2026-07-19` to `2026-07-26` for comparison — one extra `get recovery` call, no extra OAuth or config) and shows the change, color-coded by whether that direction is actually good for that metric:
+
+- **RHR**: lower is better → a decrease is colored green ("improved"), an increase is orange ("worsened").
+- **HRV**: higher is better → the same colors, opposite direction.
+- **Skin temperature**: shown with no color judgment at all, deliberately. There's no established "higher is always better" or "lower is always better" for skin temperature — a deviation in either direction can just mean normal variation, or could be a signal worth attention. Color-coding it green/orange would be asserting a health claim this project has no basis for. The delta number is still shown, just neutral.
+
+Colors are the dataviz skill's reserved status tokens (`#0ca30c` good / `#ec835a` serious), never used as the categorical/chart palette, and always paired with a direction arrow and a word ("improved"/"worsened") — never color alone. If the previous period has no data (e.g. account too new), the delta line simply doesn't render for that tile; the report doesn't fail.
+
+### Zone breakdown
+
+The six `zone_*_milli` fields render as one horizontal stacked bar per workout instead of six raw-millisecond columns, using a single-hue ordinal ramp (light = zone 0, dark = zone 5 — intensity is inherently ordered, so this isn't a categorical/identity color choice). Hover a segment for the exact minutes. A shared legend above the table explains the scale once, rather than per row.
+
+### Sport filter
+
+A dropdown above the workout table lists every distinct `sport_name` present; selecting one hides non-matching rows via a small inline script (no external JS, still a single self-contained file).
 
 ## Not built yet
 

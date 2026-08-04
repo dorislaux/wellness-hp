@@ -257,6 +257,149 @@ class FetchDataTests(unittest.TestCase):
             with self.assertRaises(report.ReportError):
                 report.fetch_data("default", "2026-07-27", "2026-08-03")
 
+    def test_previous_period_is_equal_length_and_immediately_before(self) -> None:
+        # 2026-07-27..2026-08-03 is 8 days inclusive; previous period must also be
+        # 8 days, ending the day before start (not hardcoded to 7 days anywhere).
+        previous_start, previous_end = report._previous_period("2026-07-27", "2026-08-03")
+        self.assertEqual(previous_end, "2026-07-26")
+        self.assertEqual(previous_start, "2026-07-19")
+
+    def test_fetch_previous_recovery_calls_get_recovery_with_computed_range(self) -> None:
+        calls = []
+
+        def fake_run(cmd, capture_output, text):
+            calls.append(cmd)
+            return type("R", (), {"returncode": 0, "stdout": json.dumps({"data": [{"id": 9}]}), "stderr": ""})()
+
+        with patch("subprocess.run", side_effect=fake_run):
+            result = report.fetch_previous_recovery("default", "2026-07-27", "2026-08-03")
+
+        self.assertEqual(result, [{"id": 9}])
+        self.assertIn("recovery", calls[0])
+        self.assertIn("2026-07-19T00:00:00.000Z", calls[0])
+        self.assertIn("2026-07-26T23:59:59.999Z", calls[0])
+
+
+class PercentFormatterTests(unittest.TestCase):
+    def test_rounds_to_whole_number_with_percent_sign(self) -> None:
+        formatter = report._percent_formatter("x")
+        self.assertEqual(formatter({"x": 88.4}), "88%")
+        self.assertEqual(formatter({"x": 88.6}), "89%")
+
+    def test_missing_value_renders_dash(self) -> None:
+        formatter = report._percent_formatter("x")
+        self.assertEqual(formatter({"x": None}), "—")
+
+
+class ZoneBarTests(unittest.TestCase):
+    def _row(self, **zones: int) -> dict:
+        base = {key: None for key in report.ZONE_KEYS}
+        base.update(zones)
+        return base
+
+    def test_no_zone_data_shows_placeholder(self) -> None:
+        html = report._zone_bar(self._row())
+        self.assertIn("No zone data", html)
+        self.assertNotIn("<svg", html)
+
+    def test_renders_one_segment_per_nonzero_zone(self) -> None:
+        row = self._row(zone_zero_milli=60000, zone_two_milli=120000)
+        html = report._zone_bar(row)
+        self.assertIn("<svg", html)
+        self.assertEqual(html.count("<rect"), 3)  # clip rect + 2 nonzero zone segments
+        self.assertIn("var(--zone-0)", html)
+        self.assertIn("var(--zone-2)", html)
+        self.assertNotIn("var(--zone-1)", html)
+
+    def test_tooltip_shows_minutes_not_milliseconds(self) -> None:
+        row = self._row(zone_zero_milli=300000)  # 5 minutes
+        html = report._zone_bar(row)
+        self.assertIn("Zone 0: 5 min", html)
+        self.assertNotIn("300000", html)
+
+
+class SportFilterTests(unittest.TestCase):
+    def test_no_workouts_renders_nothing(self) -> None:
+        self.assertEqual(report._sport_filter([]), "")
+
+    def test_lists_distinct_sports_sorted(self) -> None:
+        rows = [{"sport_name": "running"}, {"sport_name": "cycling"}, {"sport_name": "running"}]
+        html = report._sport_filter(rows)
+        self.assertIn("All sports", html)
+        running_index = html.index("running")
+        cycling_index = html.index("cycling")
+        self.assertLess(cycling_index, running_index)  # alphabetical
+        self.assertEqual(html.count("<option"), 3)  # "All sports" + 2 distinct
+
+    def test_includes_filter_script_targeting_workout_table(self) -> None:
+        html = report._sport_filter([{"sport_name": "running"}])
+        self.assertIn("workout-table", html)
+        self.assertIn("<script>", html)
+
+
+class StatTileDeltaTests(unittest.TestCase):
+    def test_lower_is_better_and_value_decreased_shows_good(self) -> None:
+        html = report._stat_tile("RHR", 50.0, " bpm", delta=-4.5, good_direction="down")
+        self.assertIn(report.STATUS_GOOD, html)
+        self.assertIn("improved", html)
+        self.assertIn("▼", html)
+
+    def test_lower_is_better_and_value_increased_shows_serious(self) -> None:
+        html = report._stat_tile("RHR", 60.0, " bpm", delta=5.0, good_direction="down")
+        self.assertIn(report.STATUS_SERIOUS, html)
+        self.assertIn("worsened", html)
+        self.assertIn("▲", html)
+
+    def test_higher_is_better_and_value_increased_shows_good(self) -> None:
+        html = report._stat_tile("HRV", 50.0, " ms", delta=6.0, good_direction="up")
+        self.assertIn(report.STATUS_GOOD, html)
+        self.assertIn("improved", html)
+
+    def test_no_good_direction_never_colors_the_delta(self) -> None:
+        # Skin temperature: no established "higher/lower is better" direction.
+        html = report._stat_tile("Skin temp", 33.5, " °C", delta=0.2, good_direction=None)
+        self.assertNotIn(report.STATUS_GOOD, html)
+        self.assertNotIn(report.STATUS_SERIOUS, html)
+        self.assertIn("vs previous period", html)
+
+    def test_zero_delta_is_neutral_even_with_good_direction_set(self) -> None:
+        html = report._stat_tile("RHR", 50.0, " bpm", delta=0.0, good_direction="down")
+        self.assertNotIn(report.STATUS_GOOD, html)
+        self.assertNotIn(report.STATUS_SERIOUS, html)
+
+    def test_no_delta_renders_no_delta_block_at_all(self) -> None:
+        html = report._stat_tile("RHR", 50.0, " bpm")
+        self.assertNotIn('class="stat-delta"', html)
+
+
+class BuildHtmlDeltaIntegrationTests(unittest.TestCase):
+    def test_report_shows_deltas_when_previous_period_available(self) -> None:
+        data = {
+            "recovery": [
+                {"created_at": "2026-07-28T00:00:00Z",
+                 "score": {"resting_heart_rate": 50.0, "hrv_rmssd_milli": 50.0, "skin_temp_celsius": 33.5}},
+            ],
+            "sleep": [],
+            "workout": [],
+        }
+        previous = [
+            {"created_at": "2026-07-20T00:00:00Z",
+             "score": {"resting_heart_rate": 55.0, "hrv_rmssd_milli": 45.0, "skin_temp_celsius": 33.3}},
+        ]
+        html = report.build_html("default", "2026-07-27", "2026-08-03", data, previous)
+        self.assertIn("improved", html)  # both RHR (down) and HRV (up) moved the good way
+
+    def test_report_has_no_delta_when_previous_period_missing(self) -> None:
+        data = {
+            "recovery": [
+                {"created_at": "2026-07-28T00:00:00Z", "score": {"resting_heart_rate": 50.0}},
+            ],
+            "sleep": [],
+            "workout": [],
+        }
+        html = report.build_html("default", "2026-07-27", "2026-08-03", data, None)
+        self.assertNotIn('class="stat-delta"', html)
+
 
 if __name__ == "__main__":
     unittest.main()
