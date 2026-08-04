@@ -303,6 +303,14 @@ def _table(
     )
 
 
+def _axis_label_anchor(index: int, count: int) -> str:
+    if index == 0:
+        return "start"
+    if index == count - 1:
+        return "end"
+    return "middle"
+
+
 def _line_chart(
     rows: list[dict], key: str, label: str, color: str, *, trim: bool = False
 ) -> str:
@@ -310,35 +318,79 @@ def _line_chart(
     if not points:
         return f'<p class="empty">No {escape(label)} data to chart.</p>'
 
-    width, height, padding = 640, 160, 28
-    plot_w = width - 2 * padding
-    plot_h = height - 2 * padding
+    width, height = 640, 180
+    pad_left, pad_right, pad_top, pad_bottom = 44, 16, 16, 32
+    plot_w = width - pad_left - pad_right
+    plot_h = height - pad_top - pad_bottom
     values = [value for _, value in points]
     lo, hi = min(values), max(values)
     span = (hi - lo) or 1
     step = plot_w / max(len(points) - 1, 1)
 
-    coords = []
-    for i, (_, value) in enumerate(points):
-        x = padding + i * step
-        y = padding + plot_h - ((value - lo) / span) * plot_h
-        coords.append((x, y))
-
     def tooltip_value(value: float) -> str:
         formatted = _format(value)
         return _trim_zeros(formatted) if trim else formatted
 
+    coords = []
+    for i, (_, value) in enumerate(points):
+        x = pad_left + i * step
+        y = pad_top + plot_h - ((value - lo) / span) * plot_h
+        coords.append((x, y))
+
+    # Y-axis: three ticks (max/mid/min) is enough to read the scale without
+    # cluttering a 180px-tall chart.
+    y_ticks = []
+    for value in (hi, (lo + hi) / 2, lo):
+        y = pad_top + plot_h - ((value - lo) / span) * plot_h
+        y_ticks.append((y, tooltip_value(value)))
+    gridlines = "".join(
+        f'<line class="chart-gridline" x1="{pad_left}" y1="{y:.1f}" '
+        f'x2="{width - pad_right}" y2="{y:.1f}" />'
+        f'<text class="chart-axis-label" x="{pad_left - 8}" y="{y:.1f}" '
+        f'text-anchor="end" dominant-baseline="middle">{escape(text)}</text>'
+        for y, text in y_ticks
+    )
+
+    # X-axis: label the first and last point, plus the midpoint when there's
+    # enough room for it not to collide with its neighbors.
+    label_indices = sorted({0, len(points) - 1} | ({len(points) // 2} if len(points) > 4 else set()))
+    x_labels = "".join(
+        f'<text class="chart-axis-label" x="{coords[i][0]:.1f}" '
+        f'y="{height - pad_bottom + 18}" text-anchor="{_axis_label_anchor(i, len(points))}">'
+        f"{escape(points[i][0])}</text>"
+        for i in label_indices
+    )
+
     polyline = " ".join(f"{x:.1f},{y:.1f}" for x, y in coords)
     dots = "".join(
-        f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3" fill="{color}">'
+        f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3" fill="{color}" '
+        f'data-x="{x:.1f}" data-y="{y:.1f}" data-date="{escape(date)}" '
+        f'data-value="{escape(tooltip_value(value))}">'
         f"<title>{escape(date)}: {tooltip_value(value)}</title></circle>"
         for (date, value), (x, y) in zip(points, coords)
     )
+
+    hit_area = (
+        f'<rect class="chart-hit-area" x="{pad_left}" y="{pad_top}" '
+        f'width="{plot_w:.1f}" height="{plot_h:.1f}" fill="transparent" />'
+    )
+    crosshair = (
+        '<g class="chart-crosshair" style="display:none">'
+        f'<line class="chart-crosshair-line" y1="{pad_top}" y2="{height - pad_bottom}" />'
+        '<circle class="chart-crosshair-dot" r="5" />'
+        '<g class="chart-tooltip">'
+        '<rect class="chart-tooltip-bg" />'
+        '<text class="chart-tooltip-date"></text>'
+        '<text class="chart-tooltip-value"></text>'
+        "</g></g>"
+    )
+
     return (
-        f'<svg viewBox="0 0 {width} {height}" width="100%" height="{height}" '
-        f'role="img" aria-label="{escape(label)} trend">'
+        f'<svg class="chart-svg" viewBox="0 0 {width} {height}" width="100%" '
+        f'height="{height}" role="img" aria-label="{escape(label)} trend">'
+        f"{gridlines}{x_labels}"
         f'<polyline fill="none" stroke="{color}" stroke-width="2" points="{polyline}" />'
-        f"{dots}</svg>"
+        f"{dots}{hit_area}{crosshair}</svg>"
     )
 
 
@@ -484,37 +536,156 @@ GRANULARITY_SCRIPT = """
     }).filter(function (p) { return p.value !== null; });
   }
 
+  function axisLabelAnchor(index, count) {
+    if (index === 0) return "start";
+    if (index === count - 1) return "end";
+    return "middle";
+  }
+
+  // Mirrors _line_chart in the Python source: same padding, same three-tick
+  // Y-axis, same first/mid/last X-axis labels, same data-* attributes on each
+  // dot so attachChartInteractivity works identically on both renderers.
   function renderLineChart(containerId, points, label, color, trim) {
     var container = document.getElementById(containerId);
     if (!points.length) {
       container.innerHTML = '<p class="empty">No ' + escapeHtml(label) + ' data to chart.</p>';
       return;
     }
-    var width = 640, height = 160, padding = 28;
-    var plotW = width - 2 * padding;
-    var plotH = height - 2 * padding;
+    var width = 640, height = 180;
+    var padLeft = 44, padRight = 16, padTop = 16, padBottom = 32;
+    var plotW = width - padLeft - padRight;
+    var plotH = height - padTop - padBottom;
     var values = points.map(function (p) { return p.value; });
     var lo = Math.min.apply(null, values);
     var hi = Math.max.apply(null, values);
     var span = (hi - lo) || 1;
     var step = plotW / Math.max(points.length - 1, 1);
     var coords = points.map(function (p, i) {
-      var x = padding + i * step;
-      var y = padding + plotH - ((p.value - lo) / span) * plotH;
+      var x = padLeft + i * step;
+      var y = padTop + plotH - ((p.value - lo) / span) * plotH;
       return [x, y];
     });
+
+    function tooltipValue(value) {
+      var formatted = value.toFixed(2);
+      return trim ? trimZeros(formatted) : formatted;
+    }
+
+    var yTicks = [hi, (lo + hi) / 2, lo].map(function (value) {
+      var y = padTop + plotH - ((value - lo) / span) * plotH;
+      return [y, tooltipValue(value)];
+    });
+    var gridlines = yTicks.map(function (tick) {
+      return '<line class="chart-gridline" x1="' + padLeft + '" y1="' + tick[0].toFixed(1) +
+        '" x2="' + (width - padRight) + '" y2="' + tick[0].toFixed(1) + '" />' +
+        '<text class="chart-axis-label" x="' + (padLeft - 8) + '" y="' + tick[0].toFixed(1) +
+        '" text-anchor="end" dominant-baseline="middle">' + escapeHtml(tick[1]) + '</text>';
+    }).join("");
+
+    var labelIndices = [0, points.length - 1];
+    if (points.length > 4) labelIndices.push(Math.floor(points.length / 2));
+    labelIndices = labelIndices.filter(function (v, i, arr) { return arr.indexOf(v) === i; }).sort(function (a, b) { return a - b; });
+    var xLabels = labelIndices.map(function (i) {
+      return '<text class="chart-axis-label" x="' + coords[i][0].toFixed(1) + '" y="' + (height - padBottom + 18) +
+        '" text-anchor="' + axisLabelAnchor(i, points.length) + '">' + escapeHtml(points[i].key) + '</text>';
+    }).join("");
+
     var polyline = coords.map(function (c) { return c[0].toFixed(1) + "," + c[1].toFixed(1); }).join(" ");
     var dots = points.map(function (p, i) {
       var c = coords[i];
-      var valueText = p.value.toFixed(2);
-      if (trim) valueText = trimZeros(valueText);
-      return '<circle cx="' + c[0].toFixed(1) + '" cy="' + c[1].toFixed(1) + '" r="3" fill="' + color + '">' +
+      var valueText = tooltipValue(p.value);
+      return '<circle cx="' + c[0].toFixed(1) + '" cy="' + c[1].toFixed(1) + '" r="3" fill="' + color + '" ' +
+        'data-x="' + c[0].toFixed(1) + '" data-y="' + c[1].toFixed(1) + '" data-date="' + escapeHtml(p.key) +
+        '" data-value="' + escapeHtml(valueText) + '">' +
         '<title>' + escapeHtml(p.key) + ": " + valueText + '</title></circle>';
     }).join("");
-    container.innerHTML = '<svg viewBox="0 0 ' + width + ' ' + height + '" width="100%" height="' + height +
+
+    var hitArea = '<rect class="chart-hit-area" x="' + padLeft + '" y="' + padTop + '" width="' + plotW +
+      '" height="' + plotH + '" fill="transparent" />';
+    var crosshair = '<g class="chart-crosshair" style="display:none">' +
+      '<line class="chart-crosshair-line" y1="' + padTop + '" y2="' + (height - padBottom) + '" />' +
+      '<circle class="chart-crosshair-dot" r="5" />' +
+      '<g class="chart-tooltip"><rect class="chart-tooltip-bg" />' +
+      '<text class="chart-tooltip-date"></text><text class="chart-tooltip-value"></text></g></g>';
+
+    container.innerHTML = '<svg class="chart-svg" viewBox="0 0 ' + width + ' ' + height + '" width="100%" height="' + height +
       '" role="img" aria-label="' + escapeHtml(label) + ' trend">' +
+      gridlines + xLabels +
       '<polyline fill="none" stroke="' + color + '" stroke-width="2" points="' + polyline + '" />' +
-      dots + '</svg>';
+      dots + hitArea + crosshair + '</svg>';
+  }
+
+  // Generic crosshair + tooltip layer, shared by both the Python-rendered
+  // initial chart and every JS re-render: reads points back from the dots'
+  // data-* attributes rather than needing its own copy of the chart data, so
+  // it works the same regardless of which renderer produced the SVG. Defaults
+  // to the latest point (on attach and whenever the pointer leaves) so the
+  // reader always sees a value, not an empty chart.
+  function attachChartInteractivity(containerId) {
+    var container = document.getElementById(containerId);
+    var svg = container && container.querySelector("svg.chart-svg");
+    if (!svg) return;
+    var hitArea = svg.querySelector(".chart-hit-area");
+    var points = Array.prototype.slice.call(svg.querySelectorAll("circle[data-x]")).map(function (c) {
+      return { x: parseFloat(c.dataset.x), y: parseFloat(c.dataset.y), date: c.dataset.date, value: c.dataset.value };
+    });
+    if (!hitArea || !points.length) return;
+
+    var line = svg.querySelector(".chart-crosshair-line");
+    var dot = svg.querySelector(".chart-crosshair-dot");
+    var tooltipGroup = svg.querySelector(".chart-crosshair");
+    var tooltipBg = svg.querySelector(".chart-tooltip-bg");
+    var tooltipDate = svg.querySelector(".chart-tooltip-date");
+    var tooltipValue = svg.querySelector(".chart-tooltip-value");
+    var viewBoxWidth = parseFloat(svg.getAttribute("viewBox").split(" ")[2]);
+
+    function showAt(point) {
+      line.setAttribute("x1", point.x);
+      line.setAttribute("x2", point.x);
+      dot.setAttribute("cx", point.x);
+      dot.setAttribute("cy", point.y);
+      tooltipDate.textContent = point.date;
+      tooltipValue.textContent = point.value;
+
+      var boxWidth = 90, boxHeight = 34;
+      var boxX = point.x + 10;
+      if (boxX + boxWidth > viewBoxWidth - 4) boxX = point.x - boxWidth - 10;
+      var boxY = Math.max(point.y - boxHeight - 8, 4);
+      tooltipBg.setAttribute("x", boxX);
+      tooltipBg.setAttribute("y", boxY);
+      tooltipBg.setAttribute("width", boxWidth);
+      tooltipBg.setAttribute("height", boxHeight);
+      tooltipDate.setAttribute("x", boxX + 8);
+      tooltipDate.setAttribute("y", boxY + 14);
+      tooltipValue.setAttribute("x", boxX + 8);
+      tooltipValue.setAttribute("y", boxY + 28);
+      tooltipGroup.style.display = "";
+    }
+
+    function nearestPoint(svgX) {
+      var nearest = points[0];
+      var best = Math.abs(points[0].x - svgX);
+      for (var i = 1; i < points.length; i++) {
+        var d = Math.abs(points[i].x - svgX);
+        if (d < best) { best = d; nearest = points[i]; }
+      }
+      return nearest;
+    }
+
+    function svgXFromEvent(evt) {
+      var rect = svg.getBoundingClientRect();
+      var scale = viewBoxWidth / rect.width;
+      return (evt.clientX - rect.left) * scale;
+    }
+
+    hitArea.addEventListener("pointermove", function (evt) {
+      showAt(nearestPoint(svgXFromEvent(evt)));
+    });
+    hitArea.addEventListener("pointerleave", function () {
+      showAt(points[points.length - 1]);
+    });
+
+    showAt(points[points.length - 1]);
   }
 
   function renderStatTile(label, value, unit, delta, goodDirection, trim) {
@@ -551,6 +722,8 @@ GRANULARITY_SCRIPT = """
 
     renderLineChart("recovery-chart", seriesFor(recoveryBuckets, "recovery_score"), "Recovery score", "#4c6ef5", true);
     renderLineChart("sleep-chart", seriesFor(sleepBuckets, "sleep_performance_percentage"), "Sleep performance %", "#f76707", false);
+    attachChartInteractivity("recovery-chart");
+    attachChartInteractivity("sleep-chart");
 
     var currentKey = bucketKey(REPORT_DATA.anchor_date, granularity);
     var previousKey = previousBucketKey(REPORT_DATA.anchor_date, granularity);
@@ -574,6 +747,12 @@ GRANULARITY_SCRIPT = """
       renderStatTile("HRV — " + periodLabel, hrv.current, " ms", hrv.delta, "up", false) +
       renderStatTile("Skin temperature — " + periodLabel, skinTemp.current, " °C", skinTemp.delta, null, false);
   };
+
+  // The "Day" view is pre-rendered by Python on page load (works with JS
+  // disabled); this makes that initial chart interactive too, not just the
+  // ones the granularity dropdown re-renders.
+  attachChartInteractivity("recovery-chart");
+  attachChartInteractivity("sleep-chart");
 })();
 </script>
 """
@@ -627,6 +806,24 @@ PAGE_TEMPLATE = """<!doctype html>
   .filter-row label {{ margin-right: 0.5rem; opacity: 0.7; }}
   .filter-row select {{ font: inherit; padding: 0.25rem 0.5rem; border-radius: 6px;
                         border: 1px solid #2a2b33; background: #16171d; color: inherit; }}
+  .detail-toggle {{ margin-top: 1rem; }}
+  .detail-toggle summary {{ cursor: pointer; font-size: 0.85rem; opacity: 0.75;
+                            padding: 0.25rem 0; user-select: none; }}
+  .detail-toggle summary:hover {{ opacity: 1; }}
+  .detail-toggle[open] summary {{ margin-bottom: 0.25rem; }}
+  .chart-svg {{ overflow: visible; }}
+  .chart-gridline {{ stroke: currentColor; stroke-opacity: 0.12; stroke-width: 1; }}
+  .chart-axis-label {{ font-size: 9px; fill: currentColor; opacity: 0.55; }}
+  .chart-hit-area {{ cursor: crosshair; }}
+  .chart-crosshair-line {{ stroke: currentColor; stroke-opacity: 0.35; stroke-width: 1; pointer-events: none; }}
+  .chart-crosshair-dot {{ stroke: #16171d; stroke-width: 2; pointer-events: none; }}
+  .chart-tooltip-bg {{ fill: #16171d; stroke: #2a2b33; stroke-width: 1; rx: 4; pointer-events: none; }}
+  .chart-tooltip-date {{ font-size: 9px; fill: currentColor; opacity: 0.7; pointer-events: none; }}
+  .chart-tooltip-value {{ font-size: 12px; font-weight: 600; fill: currentColor; pointer-events: none; }}
+  @media (prefers-color-scheme: light) {{
+    .chart-crosshair-dot {{ stroke: #fff; }}
+    .chart-tooltip-bg {{ fill: #fff; stroke: #e2e2e2; }}
+  }}
   @media (max-width: 560px) {{
     .stat-bar {{ flex-direction: column; }}
   }}
@@ -653,20 +850,29 @@ PAGE_TEMPLATE = """<!doctype html>
 <div class="card">
   <h2>Recovery</h2>
   <div id="recovery-chart">{recovery_chart}</div>
-  {recovery_table}
+  <details class="detail-toggle">
+    <summary>Show details</summary>
+    {recovery_table}
+  </details>
 </div>
 
 <div class="card">
   <h2>Sleep</h2>
   <div id="sleep-chart">{sleep_chart}</div>
-  {sleep_table}
+  <details class="detail-toggle">
+    <summary>Show details</summary>
+    {sleep_table}
+  </details>
 </div>
 
 <div class="card">
   <h2>Workout</h2>
-  {sport_filter}
-  {workout_table}
-  {zone_legend}
+  <details class="detail-toggle">
+    <summary>Show details</summary>
+    {sport_filter}
+    {workout_table}
+    {zone_legend}
+  </details>
 </div>
 
 <script type="application/json" id="report-data">{report_data_json}</script>

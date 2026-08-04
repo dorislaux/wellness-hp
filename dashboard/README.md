@@ -17,11 +17,23 @@ Pulls only the fields decided in [`whoop/references/endpoints.md`](../whoop/refe
 - **Sleep**: `sleep_performance_percentage`, `sleep_efficiency_percentage`, `sleep_consistency_percentage`
 - **Workout**: everything (fetched in full; a couple of always-null columns are hidden from the table itself, see below)
 
-The page has a **View by** dropdown (Day/Week/Month/Year), a stat-tile row (RHR/HRV/skin temperature for whatever's currently selected), a Recovery card (line chart + table), a Sleep card (line chart + table), and a Workout card (a sport filter, a table, and a zone-effort legend).
+The page has a **View by** dropdown (Day/Week/Month/Year), a stat-tile row (RHR/HRV/skin temperature for whatever's currently selected), a Recovery card (line chart + details), a Sleep card (line chart + details), and a Workout card (details only — sport filter, table, zone-effort legend).
+
+Each card's table/filter/legend is tucked behind a collapsed **"Show details"** toggle (a native `<details>`/`<summary>`, no JS involved) so the charts are the first thing you see instead of a wall of numbers. Expand a section to get the full daily/per-workout detail; collapse it again any time. State isn't remembered across reloads — every page load starts collapsed.
 
 `score_state` is fetched but deliberately not shown in any table — it's WHOOP's internal "is this fully scored yet" flag, not something end users need to see. `distance_meter` and `altitude_gain_meter` are hidden from the workout table because WHOOP only populates them when GPS/altitude data was actually captured (confirmed null for weightlifting-style workouts without that data) — `altitude_change_meter` has the same caveat and is currently still shown; hide it too if it's consistently null for your workout types.
 
 Charts are hand-rolled inline SVG (no charting library, no CDN, nothing fetched at view time), plus a data table per section.
+
+### Interactive charts
+
+Both line charts (Recovery, Sleep) have real axes and a crosshair:
+
+- A **Y-axis** shows three ticks (min / midpoint / max of whatever's plotted) and an **X-axis** labels the first, middle, and last dates — enough to read the scale without cluttering a small chart.
+- Moving the pointer anywhere over the plot area shows a vertical crosshair that **snaps to the nearest data point** (you don't have to land precisely on a dot) and a tooltip with that point's date and value.
+- The chart **defaults to showing the latest point** — on page load and every time you move the pointer off the chart — so there's always a value on screen, not an empty chart waiting for a hover. This is deliberate: readers shouldn't have to discover that hovering reveals data.
+- The same detail shown in the tooltip is also reachable without hovering, in each card's table (see above) — the tooltip is a shortcut, not the only way to see a number.
+- Charts rendered by the granularity filter (Week/Month/Year) get the same axes and crosshair as the initial Python-rendered "Day" chart — one shared JS function (`attachChartInteractivity`) reads the data straight back off each dot's `data-*` attributes, so it works identically regardless of which renderer (Python or JS) produced the SVG.
 
 `recovery_score` and `resting_heart_rate` display without a trailing ".0"/".00" when the value is a whole number (e.g. "62", "55 bpm"), but keep real decimal digits when there are any (e.g. "62.5"). This applies everywhere those two fields show up — the recovery table, the stat tile, the stat-tile delta, and the recovery chart's hover tooltip — in both the Python-rendered default view and the JS-driven granularity views, kept in sync deliberately (`_trim_zeros` in Python, `trimZeros` in JS, same logic). HRV and skin temperature are intentionally untouched; ask if you want the same treatment there.
 

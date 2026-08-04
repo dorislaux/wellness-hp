@@ -146,6 +146,58 @@ class RenderingTests(unittest.TestCase):
         self.assertIn("<svg", html)
 
 
+class ChartAxisAndInteractivityTests(unittest.TestCase):
+    def _rows(self) -> list[dict]:
+        return [
+            {"date": "2026-07-25", "x": 10.0},
+            {"date": "2026-07-26", "x": 20.0},
+            {"date": "2026-07-27", "x": 15.0},
+            {"date": "2026-07-28", "x": 30.0},
+            {"date": "2026-07-29", "x": 25.0},
+        ]
+
+    def test_y_axis_has_three_ticks_at_min_mid_max(self) -> None:
+        html = report._line_chart(self._rows(), "x", "X", "#000", trim=True)
+        self.assertEqual(html.count("chart-axis-label"), 3 + 3)  # 3 y-ticks + 3 x-labels (>4 points)
+        self.assertIn(">10<", html)
+        self.assertIn(">30<", html)
+        self.assertIn(">20<", html)  # midpoint of 10 and 30
+
+    def test_x_axis_labels_first_middle_last_when_enough_points(self) -> None:
+        html = report._line_chart(self._rows(), "x", "X", "#000")
+        self.assertIn(">2026-07-25<", html)
+        self.assertIn(">2026-07-27<", html)  # middle index
+        self.assertIn(">2026-07-29<", html)
+
+    def test_x_axis_skips_middle_label_with_few_points(self) -> None:
+        rows = self._rows()[:3]
+        html = report._line_chart(rows, "x", "X", "#000")
+        self.assertIn(">2026-07-25<", html)
+        self.assertIn(">2026-07-27<", html)
+        self.assertEqual(html.count('class="chart-axis-label"'), 3 + 2)
+
+    def test_dots_carry_data_attributes_for_js_interactivity(self) -> None:
+        html = report._line_chart(self._rows(), "x", "X", "#000", trim=True)
+        self.assertIn('data-date="2026-07-28"', html)
+        self.assertIn('data-value="30"', html)
+        self.assertRegex(html, r'data-x="[\d.]+"')
+        self.assertRegex(html, r'data-y="[\d.]+"')
+
+    def test_chart_includes_hit_area_and_crosshair_scaffold(self) -> None:
+        html = report._line_chart(self._rows(), "x", "X", "#000")
+        self.assertIn('class="chart-hit-area"', html)
+        self.assertIn('class="chart-crosshair"', html)
+        self.assertIn('class="chart-crosshair-line"', html)
+        self.assertIn('class="chart-crosshair-dot"', html)
+        self.assertIn('class="chart-tooltip-date"', html)
+        self.assertIn('class="chart-tooltip-value"', html)
+
+    def test_no_data_chart_has_no_axis_or_interactivity_markup(self) -> None:
+        html = report._line_chart([{"date": "2026-07-28", "x": None}], "x", "X", "#000")
+        self.assertNotIn("chart-axis-label", html)
+        self.assertNotIn("chart-hit-area", html)
+
+
 class TrimZerosTests(unittest.TestCase):
     def test_whole_number_loses_the_decimal_entirely(self) -> None:
         self.assertEqual(report._trim_zeros("62.00"), "62")
