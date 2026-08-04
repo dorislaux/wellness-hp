@@ -23,6 +23,8 @@ The page has a **View by** dropdown (Day/Week/Month/Year), a stat-tile row (RHR/
 
 Charts are hand-rolled inline SVG (no charting library, no CDN, nothing fetched at view time), plus a data table per section.
 
+`recovery_score` and `resting_heart_rate` display without a trailing ".0"/".00" when the value is a whole number (e.g. "62", "55 bpm"), but keep real decimal digits when there are any (e.g. "62.5"). This applies everywhere those two fields show up — the recovery table, the stat tile, the stat-tile delta, and the recovery chart's hover tooltip — in both the Python-rendered default view and the JS-driven granularity views, kept in sync deliberately (`_trim_zeros` in Python, `trimZeros` in JS, same logic). HRV and skin temperature are intentionally untouched; ask if you want the same treatment there.
+
 ### View by: Day / Week / Month / Year
 
 The dropdown re-aggregates the stat tiles and both line charts entirely client-side (a small inline script, no server, no refetch) — switching it doesn't touch the network. **Weeks run Monday through Sunday.** Whichever granularity is selected:

@@ -146,6 +146,48 @@ class RenderingTests(unittest.TestCase):
         self.assertIn("<svg", html)
 
 
+class TrimZerosTests(unittest.TestCase):
+    def test_whole_number_loses_the_decimal_entirely(self) -> None:
+        self.assertEqual(report._trim_zeros("62.00"), "62")
+        self.assertEqual(report._trim_zeros("100.0"), "100")
+
+    def test_real_fractional_value_keeps_only_the_meaningful_digits(self) -> None:
+        self.assertEqual(report._trim_zeros("62.50"), "62.5")
+        self.assertEqual(report._trim_zeros("62.53"), "62.53")
+
+    def test_negative_values_trim_correctly(self) -> None:
+        self.assertEqual(report._trim_zeros("-1.00"), "-1")
+        self.assertEqual(report._trim_zeros("-1.50"), "-1.5")
+
+    def test_rounded_formatter_trims_and_handles_missing(self) -> None:
+        formatter = report._rounded_formatter("x", 2)
+        self.assertEqual(formatter({"x": 62.0}), "62")
+        self.assertEqual(formatter({"x": 62.5}), "62.5")
+        self.assertEqual(formatter({"x": None}), "—")
+
+    def test_stat_tile_trim_flag_applies_to_value_and_delta(self) -> None:
+        trimmed = report._stat_tile("RHR", 55.0, " bpm", delta=-5.0, good_direction="down", trim=True)
+        self.assertIn("55 bpm", trimmed)
+        self.assertIn("-5 bpm", trimmed)
+        self.assertNotIn("55.0", trimmed)
+
+        untrimmed = report._stat_tile("RHR", 55.0, " bpm", delta=-5.0, good_direction="down")
+        self.assertIn("55.0 bpm", untrimmed)
+
+    def test_stat_tile_trim_preserves_real_decimals(self) -> None:
+        html = report._stat_tile("RHR", 55.5, " bpm", trim=True)
+        self.assertIn("55.5 bpm", html)
+
+    def test_line_chart_trim_flag_applies_to_tooltip(self) -> None:
+        rows = [{"date": "2026-07-28", "x": 60.0}, {"date": "2026-07-29", "x": 61.5}]
+        trimmed = report._line_chart(rows, "x", "X", "#000", trim=True)
+        self.assertIn("2026-07-28: 60<", trimmed)
+        self.assertIn("2026-07-29: 61.5<", trimmed)
+
+        untrimmed = report._line_chart(rows, "x", "X", "#000")
+        self.assertIn("2026-07-28: 60.00", untrimmed)
+
+
 class StatTileTests(unittest.TestCase):
     def test_average_ignores_missing_values(self) -> None:
         rows = [{"x": 10.0}, {"x": None}, {"x": 20.0}]
@@ -203,7 +245,7 @@ class BuildHtmlIntegrationTests(unittest.TestCase):
             "workout": [],
         }
         bar = stat_bar_html(report.build_html("default", "2026-07-27", "2026-08-03", data))
-        self.assertIn("55.0 bpm", bar)
+        self.assertIn("55 bpm", bar)  # whole number -> no decimal, RHR is trimmed
         self.assertIn("45.0 ms", bar)
         self.assertIn("33.5", bar)
         self.assertIn("today", bar)
@@ -457,7 +499,7 @@ class BuildHtmlDeltaIntegrationTests(unittest.TestCase):
         }
         bar = stat_bar_html(report.build_html("default", "2026-07-27", "2026-08-03", data, None))
         self.assertNotIn('class="stat-delta"', bar)
-        self.assertIn("50.0 bpm", bar)  # today's value still shows, just no comparison
+        self.assertIn("50 bpm", bar)  # today's value still shows, just no comparison
 
 
 class GranularityFilterTests(unittest.TestCase):
@@ -504,7 +546,7 @@ class GranularityFilterTests(unittest.TestCase):
         # The chart draws from the combined dataset now, not just the current range -
         # a deliberate change from before this feature, documented in the README.
         html = self._build()
-        self.assertIn("2026-07-20: 55.00", html)
+        self.assertIn("2026-07-20: 55", html)  # recovery_score is trimmed, "55" not "55.00"
 
 
 if __name__ == "__main__":

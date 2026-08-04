@@ -197,6 +197,21 @@ def _percent_formatter(key: str) -> Callable[[dict], str]:
     return formatter
 
 
+def _trim_zeros(formatted: str) -> str:
+    """"62.00" -> "62", "62.50" -> "62.5", "62.53" -> "62.53" - the decimal point
+    is a hard stop, so this never eats into the integer part (e.g. "100.00" -> "100",
+    not "1")."""
+    return formatted.rstrip("0").rstrip(".") if "." in formatted else formatted
+
+
+def _rounded_formatter(key: str, decimals: int) -> Callable[[dict], str]:
+    def formatter(row: dict) -> str:
+        value = row.get(key)
+        return "—" if value is None else _trim_zeros(f"{value:.{decimals}f}")
+
+    return formatter
+
+
 def _zone_bar(row: dict) -> str:
     values = [row.get(key) or 0 for key in ZONE_KEYS]
     total = sum(values)
@@ -288,7 +303,9 @@ def _table(
     )
 
 
-def _line_chart(rows: list[dict], key: str, label: str, color: str) -> str:
+def _line_chart(
+    rows: list[dict], key: str, label: str, color: str, *, trim: bool = False
+) -> str:
     points = [(row["date"], row[key]) for row in rows if row.get(key) is not None]
     if not points:
         return f'<p class="empty">No {escape(label)} data to chart.</p>'
@@ -307,10 +324,14 @@ def _line_chart(rows: list[dict], key: str, label: str, color: str) -> str:
         y = padding + plot_h - ((value - lo) / span) * plot_h
         coords.append((x, y))
 
+    def tooltip_value(value: float) -> str:
+        formatted = _format(value)
+        return _trim_zeros(formatted) if trim else formatted
+
     polyline = " ".join(f"{x:.1f},{y:.1f}" for x, y in coords)
     dots = "".join(
         f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3" fill="{color}">'
-        f"<title>{escape(date)}: {_format(value)}</title></circle>"
+        f"<title>{escape(date)}: {tooltip_value(value)}</title></circle>"
         for (date, value), (x, y) in zip(points, coords)
     )
     return (
@@ -339,10 +360,15 @@ def _stat_tile(
     *,
     delta: float | None = None,
     good_direction: str | None = None,
+    trim: bool = False,
 ) -> str:
+    def fmt(v: float) -> str:
+        formatted = f"{v:.1f}"
+        return _trim_zeros(formatted) if trim else formatted
+
     # No per-tile accent color on the value itself: these are independent headline
     # numbers, not comparable series, so there's no identity for hue to encode.
-    display = f"{value:.1f}{unit}" if value is not None else "—"
+    display = f"{fmt(value)}{unit}" if value is not None else "—"
 
     delta_html = ""
     if delta is not None:
@@ -358,7 +384,7 @@ def _stat_tile(
             is_good = rounded > 0 if good_direction == "up" else rounded < 0
             color = STATUS_GOOD if is_good else STATUS_SERIOUS
             judgment = "improved" if is_good else "worsened"
-        text = f"{arrow} {sign}{delta:.1f}{unit} {judgment}".strip()
+        text = f"{arrow} {sign}{fmt(delta)}{unit} {judgment}".strip()
         style = f' style="color:{color}"' if color else ""
         delta_html = f'<div class="stat-delta"{style}>{escape(text)}</div>'
 
@@ -436,6 +462,13 @@ GRANULARITY_SCRIPT = """
     return sum / nonNull.length;
   }
 
+  // "62.00" -> "62", "62.50" -> "62.5", "62.53" -> "62.53" - mirrors _trim_zeros
+  // in the Python source exactly (same rstrip('0').rstrip('.') logic).
+  function trimZeros(formatted) {
+    if (formatted.indexOf(".") === -1) return formatted;
+    return formatted.replace(/0+$/, "").replace(/\.$/, "");
+  }
+
   function groupBy(rows, granularity) {
     var buckets = {};
     rows.forEach(function (row) {
@@ -451,7 +484,7 @@ GRANULARITY_SCRIPT = """
     }).filter(function (p) { return p.value !== null; });
   }
 
-  function renderLineChart(containerId, points, label, color) {
+  function renderLineChart(containerId, points, label, color, trim) {
     var container = document.getElementById(containerId);
     if (!points.length) {
       container.innerHTML = '<p class="empty">No ' + escapeHtml(label) + ' data to chart.</p>';
@@ -473,8 +506,10 @@ GRANULARITY_SCRIPT = """
     var polyline = coords.map(function (c) { return c[0].toFixed(1) + "," + c[1].toFixed(1); }).join(" ");
     var dots = points.map(function (p, i) {
       var c = coords[i];
+      var valueText = p.value.toFixed(2);
+      if (trim) valueText = trimZeros(valueText);
       return '<circle cx="' + c[0].toFixed(1) + '" cy="' + c[1].toFixed(1) + '" r="3" fill="' + color + '">' +
-        '<title>' + escapeHtml(p.key) + ": " + p.value.toFixed(2) + '</title></circle>';
+        '<title>' + escapeHtml(p.key) + ": " + valueText + '</title></circle>';
     }).join("");
     container.innerHTML = '<svg viewBox="0 0 ' + width + ' ' + height + '" width="100%" height="' + height +
       '" role="img" aria-label="' + escapeHtml(label) + ' trend">' +
@@ -482,8 +517,12 @@ GRANULARITY_SCRIPT = """
       dots + '</svg>';
   }
 
-  function renderStatTile(label, value, unit, delta, goodDirection) {
-    var display = value === null ? "—" : value.toFixed(1) + unit;
+  function renderStatTile(label, value, unit, delta, goodDirection, trim) {
+    function fmt(v) {
+      var formatted = v.toFixed(1);
+      return trim ? trimZeros(formatted) : formatted;
+    }
+    var display = value === null ? "—" : fmt(value) + unit;
     var deltaHtml = "";
     if (delta !== null) {
       // Base direction/judgment on the rounded (displayed) value, not the raw
@@ -498,7 +537,7 @@ GRANULARITY_SCRIPT = """
         color = isGood ? STATUS_GOOD : STATUS_SERIOUS;
         judgment = isGood ? "improved" : "worsened";
       }
-      var text = arrow + " " + sign + delta.toFixed(1) + unit + " " + judgment;
+      var text = arrow + " " + sign + fmt(delta) + unit + " " + judgment;
       var style = color ? ' style="color:' + color + '"' : "";
       deltaHtml = '<div class="stat-delta"' + style + '>' + escapeHtml(text) + '</div>';
     }
@@ -510,8 +549,8 @@ GRANULARITY_SCRIPT = """
     var recoveryBuckets = groupBy(REPORT_DATA.recovery, granularity);
     var sleepBuckets = groupBy(REPORT_DATA.sleep, granularity);
 
-    renderLineChart("recovery-chart", seriesFor(recoveryBuckets, "recovery_score"), "Recovery score", "#4c6ef5");
-    renderLineChart("sleep-chart", seriesFor(sleepBuckets, "sleep_performance_percentage"), "Sleep performance %", "#f76707");
+    renderLineChart("recovery-chart", seriesFor(recoveryBuckets, "recovery_score"), "Recovery score", "#4c6ef5", true);
+    renderLineChart("sleep-chart", seriesFor(sleepBuckets, "sleep_performance_percentage"), "Sleep performance %", "#f76707", false);
 
     var currentKey = bucketKey(REPORT_DATA.anchor_date, granularity);
     var previousKey = previousBucketKey(REPORT_DATA.anchor_date, granularity);
@@ -531,9 +570,9 @@ GRANULARITY_SCRIPT = """
     var skinTemp = statFor("skin_temp_celsius");
 
     document.getElementById("stat-bar").innerHTML =
-      renderStatTile("Resting heart rate — " + periodLabel, rhr.current, " bpm", rhr.delta, "down") +
-      renderStatTile("HRV — " + periodLabel, hrv.current, " ms", hrv.delta, "up") +
-      renderStatTile("Skin temperature — " + periodLabel, skinTemp.current, " °C", skinTemp.delta, null);
+      renderStatTile("Resting heart rate — " + periodLabel, rhr.current, " bpm", rhr.delta, "down", true) +
+      renderStatTile("HRV — " + periodLabel, hrv.current, " ms", hrv.delta, "up", false) +
+      renderStatTile("Skin temperature — " + periodLabel, skinTemp.current, " °C", skinTemp.delta, null, false);
   };
 })();
 </script>
@@ -676,6 +715,7 @@ def build_html(
                 " bpm",
                 delta=delta_for("resting_heart_rate"),
                 good_direction="down",
+                trim=True,
             ),
             _stat_tile(
                 "HRV — today",
@@ -705,10 +745,16 @@ def build_html(
         stat_bar=stat_bar,
         report_data_json=report_data_json,
         granularity_script=GRANULARITY_SCRIPT,
-        recovery_chart=_line_chart(all_recovery_rows, "recovery_score", "Recovery score", "#4c6ef5"),
+        recovery_chart=_line_chart(
+            all_recovery_rows, "recovery_score", "Recovery score", "#4c6ef5", trim=True
+        ),
         recovery_table=_table(
             recovery_rows,
             ["date", "recovery_score", "resting_heart_rate", "hrv_rmssd_milli", "skin_temp_celsius"],
+            formatters={
+                "recovery_score": _rounded_formatter("recovery_score", 2),
+                "resting_heart_rate": _rounded_formatter("resting_heart_rate", 2),
+            },
         ),
         sleep_chart=_line_chart(
             sleep_rows, "sleep_performance_percentage", "Sleep performance %", "#f76707"
