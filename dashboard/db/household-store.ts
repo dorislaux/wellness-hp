@@ -68,9 +68,34 @@ export async function ensureOwnerHousehold(
   const existing = await getHouseholdContext(user, db);
   if (existing) return existing;
 
-  const [ownerEmail] = parseAllowedEmails(process.env.WELLNESS_ALLOWED_EMAILS);
-  if (user.email.trim().toLowerCase() !== ownerEmail) {
-    throw new Error("Household membership has not been provisioned.");
+  const allowedEmails = [...parseAllowedEmails(process.env.WELLNESS_ALLOWED_EMAILS)];
+  const [ownerEmail] = allowedEmails;
+  const userEmail = user.email.trim().toLowerCase();
+  if (!allowedEmails.includes(userEmail)) {
+    throw new Error("Household access has not been granted.");
+  }
+
+  if (userEmail !== ownerEmail) {
+    const availableHouseholds = await db
+      .select({ householdId: households.id, timezone: households.timezone })
+      .from(households)
+      .limit(2);
+    if (availableHouseholds.length !== 1) {
+      throw new Error("Household membership has not been provisioned.");
+    }
+
+    const [household] = availableHouseholds;
+    await db.insert(householdUsers).values({
+      householdId: household.householdId,
+      siteUserId: user.userId,
+      role: "viewer",
+    }).onConflictDoNothing();
+
+    const provisioned = await getHouseholdContext(user, db);
+    if (!provisioned) {
+      throw new Error("Household membership has not been provisioned.");
+    }
+    return provisioned;
   }
 
   const householdId = crypto.randomUUID();
