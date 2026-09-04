@@ -202,6 +202,10 @@ export async function getWhoopCollection(
 
 function localDate(instant: unknown, offset: unknown): string | null {
   if (typeof instant !== "string" || typeof offset !== "string") return null;
+  if (offset === "Z") {
+    const value = Date.parse(instant);
+    return Number.isFinite(value) ? new Date(value).toISOString().slice(0, 10) : null;
+  }
   const match = /^([+-])(\d{2}):(\d{2})$/.exec(offset);
   if (!match) return null;
   const value = Date.parse(instant);

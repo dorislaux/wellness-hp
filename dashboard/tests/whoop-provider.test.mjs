@@ -65,3 +65,15 @@ test("does not substitute an older WHOOP day", () => {
     cycles: [],
   }), { status: "not_current" });
 });
+
+test("accepts WHOOP's UTC timezone designator", () => {
+  const value = normalizeWhoopDay({
+    date: "2026-09-04",
+    sleeps: [{ id: "sleep", cycle_id: 10, nap: false, score_state: "SCORED",
+      end: "2026-09-04T06:00:00Z", timezone_offset: "Z", updated_at: "2026-09-04T06:10:00Z" }],
+    recoveries: [{ sleep_id: "sleep", score_state: "SCORED", score: { recovery_score: 80 } }],
+    cycles: [{ id: 10, score_state: "SCORED", score: { strain: 7.1 } }],
+  });
+  assert.equal(value.status, "complete");
+  assert.equal(value.recoveryScore, 80);
+});
