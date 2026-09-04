@@ -176,7 +176,7 @@ export async function getWhoopCollection(
   resource: "cycles" | "recovery" | "sleep",
   accessToken: string,
   start: string,
-  end: string,
+  end: string | null,
   fetchImpl: Fetch = fetch,
 ): Promise<JsonRecord[]> {
   const paths = { cycles: "/v2/cycle", recovery: "/v2/recovery", sleep: "/v2/activity/sleep" };
@@ -184,7 +184,8 @@ export async function getWhoopCollection(
   let nextToken: string | undefined;
   const seen = new Set<string>();
   for (let page = 0; page < 20; page += 1) {
-    const query = new URLSearchParams({ start, end, limit: "25" });
+    const query = new URLSearchParams({ start, limit: "25" });
+    if (end) query.set("end", end);
     if (nextToken) query.set("nextToken", nextToken);
     const payload = record(
       await whoopGet(paths[resource], accessToken, query, fetchImpl),
@@ -192,7 +193,7 @@ export async function getWhoopCollection(
     );
     if (!Array.isArray(payload.records)) throw new Error("WHOOP collection omitted records.");
     for (const item of payload.records) records.push(record(item, "WHOOP record was invalid."));
-    if (payload.next_token === undefined) return records;
+    if (payload.next_token === undefined || payload.next_token === null) return records;
     nextToken = requiredString(payload.next_token, "WHOOP pagination token was invalid.");
     if (seen.has(nextToken)) throw new Error("WHOOP repeated a pagination token.");
     seen.add(nextToken);

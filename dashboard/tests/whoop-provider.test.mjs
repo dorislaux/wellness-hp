@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildWhoopAuthorizationUrl,
   exchangeWhoopCode,
+  getWhoopCollection,
   normalizeWhoopDay,
   refreshWhoopTokens,
   WHOOP_SCOPES,
@@ -29,6 +30,17 @@ test("builds an exact WHOOP authorization request", () => {
   assert.equal(url.searchParams.get("redirect_uri"), config.redirectUri);
   assert.equal(url.searchParams.get("scope"), WHOOP_SCOPES);
   assert.equal(url.searchParams.get("state"), "opaque-state");
+});
+
+test("accepts a null final page token and lets WHOOP bound current queries at now", async () => {
+  let requestedUrl;
+  const records = await getWhoopCollection("sleep", "access", "2026-09-03T00:00:00.000Z", null, async (url) => {
+    requestedUrl = new URL(url);
+    return new Response(JSON.stringify({ records: [{ id: "sleep-1" }], next_token: null }), { status: 200 });
+  });
+  assert.deepEqual(records, [{ id: "sleep-1" }]);
+  assert.equal(requestedUrl.searchParams.get("start"), "2026-09-03T00:00:00.000Z");
+  assert.equal(requestedUrl.searchParams.has("end"), false);
 });
 
 test("exchanges and refreshes rotating WHOOP tokens", async () => {

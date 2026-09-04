@@ -81,11 +81,10 @@ async function syncOura(connection: Connection, date: string) {
 async function syncWhoop(connection: Connection, date: string) {
   const accessToken = await validAccessToken(connection);
   const start = `${shiftDate(date, -1)}T00:00:00.000Z`;
-  const end = `${shiftDate(date, 2)}T00:00:00.000Z`;
   const [cycles, recoveries, sleeps] = await Promise.all([
-    getWhoopCollection("cycles", accessToken, start, end),
-    getWhoopCollection("recovery", accessToken, start, end),
-    getWhoopCollection("sleep", accessToken, start, end),
+    getWhoopCollection("cycles", accessToken, start, null),
+    getWhoopCollection("recovery", accessToken, start, null),
+    getWhoopCollection("sleep", accessToken, start, null),
   ]);
   const normalized = normalizeWhoopDay({ date, cycles, recoveries, sleeps });
   await upsertDailyRecords([{ memberId: connection.memberId, localDate: date, provider: "whoop",
@@ -97,6 +96,16 @@ function errorCode(error: unknown): "authorization_required" | "provider_unavail
     ? "authorization_required" : "provider_unavailable";
 }
 
+function diagnosticCode(error: unknown): string {
+  if (!(error instanceof Error)) return "unknown";
+  const httpStatus = /HTTP (\d{3})/.exec(error.message)?.[1];
+  if (httpStatus) return `http_${httpStatus}`;
+  if (/pagination token/i.test(error.message)) return "pagination";
+  if (/malformed JSON|response was invalid|omitted records|record was invalid/i.test(error.message)) return "response_shape";
+  if (/Failed query/i.test(error.message)) return "storage_write";
+  return "unexpected";
+}
+
 async function syncConnection(connection: Connection, date: string) {
   try {
     if (connection.provider === "oura") await syncOura(connection, date);
@@ -104,7 +113,7 @@ async function syncConnection(connection: Connection, date: string) {
     await markConnectionAttempt(connection.id, "connected", true);
   } catch (error) {
     const code = errorCode(error);
-    console.error("Provider sync failed", { provider: connection.provider, code });
+    console.error("Provider sync failed", { provider: connection.provider, code, diagnostic: diagnosticCode(error) });
     await upsertDailyRecords([{ memberId: connection.memberId, localDate: date, provider: connection.provider,
       status: "unavailable", fetchedAt: Date.now(), sanitizedErrorCode: code }]);
     await markConnectionAttempt(connection.id, code === "authorization_required" ? "action_required" : "connected", false);

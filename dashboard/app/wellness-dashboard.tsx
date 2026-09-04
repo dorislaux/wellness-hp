@@ -277,11 +277,11 @@ function DayDetail({ member, dateLabel, issues, onBack }: { member: Member; date
         <article className="panel stat-card"><span>Sleep average heart rate</span><strong>{member.sleepAverageHeartRate === null ? "—" : `${member.sleepAverageHeartRate} bpm`}</strong><Delta value={member.sleepAverageHeartRate === null || member.heartRateBaseline === null ? null : member.sleepAverageHeartRate - member.heartRateBaseline} unit="bpm" inverse /></article>
       </section>
 
-      {member.sources.includes("whoop") ? (
+      {member.sources.includes("whoop") && member.recovery !== null ? (
         <section className="panel whoop-row"><div><span>Whoop recovery</span><strong>{member.recovery}%</strong></div><div><span>Day strain</span><strong>{member.strain}</strong></div></section>
-      ) : (
+      ) : !member.sources.includes("whoop") ? (
         <section className="panel missing-row"><span className="device-icon" aria-hidden="true">◇</span><div><h2>Whoop not connected</h2><p>Strain and recovery data will appear here once paired.</p></div></section>
-      )}
+      ) : null}
     </main>
   );
 }
