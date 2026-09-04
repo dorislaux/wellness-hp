@@ -104,6 +104,8 @@ async function syncConnection(connection: Connection, date: string) {
     await markConnectionAttempt(connection.id, "connected", true);
   } catch (error) {
     const code = errorCode(error);
+    console.error("Provider sync failed", { provider: connection.provider, code,
+      reason: error instanceof Error ? error.message : "unknown_error" });
     await upsertDailyRecords([{ memberId: connection.memberId, localDate: date, provider: connection.provider,
       status: "unavailable", fetchedAt: Date.now(), sanitizedErrorCode: code }]);
     await markConnectionAttempt(connection.id, code === "authorization_required" ? "action_required" : "connected", false);

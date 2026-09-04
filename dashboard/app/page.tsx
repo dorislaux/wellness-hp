@@ -13,7 +13,8 @@ export const metadata: Metadata = {
 async function ProtectedDashboard() {
   const user = await requireHouseholdUser("/");
   const snapshot = await getWellnessSnapshot(user);
-  return <WellnessDashboard members={snapshot.members} dateLabel={snapshot.dateLabel} mode={snapshot.mode} />;
+  return <WellnessDashboard members={snapshot.members} dateLabel={snapshot.dateLabel}
+    mode={snapshot.mode} issues={snapshot.issues} />;
 }
 
 export default function Home() {

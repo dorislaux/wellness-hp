@@ -9,6 +9,7 @@ import {
   type Member,
   type SleepStage,
 } from "./mock-data";
+import type { DataIssue } from "./wellness-data";
 
 type View = "cards" | "timeline";
 type Authorization = { id: string; memberId: string; provider: "oura" | "whoop";
@@ -130,10 +131,13 @@ function SegmentedControl({ view, onChange }: { view: View; onChange: (view: Vie
 }
 
 function ProviderLabel({ member }: { member: Member }) {
-  return <span>{member.sources.length === 2 ? "Oura + Whoop" : "Oura only"}</span>;
+  const hasOura = member.sources.includes("oura");
+  const hasWhoop = member.sources.includes("whoop");
+  return <span>{hasOura && hasWhoop ? "Oura + Whoop" : hasOura ? "Oura only" : hasWhoop ? "Whoop only" : "No devices connected"}</span>;
 }
 
-function HouseholdCard({ member, onOpen }: { member: Member; onOpen: () => void }) {
+function HouseholdCard({ member, issues, onOpen }: { member: Member; issues: DataIssue[]; onOpen: () => void }) {
+  const ouraIssue = issues.find((issue) => issue.memberId === member.id && issue.source === "oura" && issue.code !== "not_connected");
   return (
     <article className="household-card">
       <button className="card-open" onClick={onOpen} aria-label={`View ${member.name}'s day`}>
@@ -161,16 +165,17 @@ function HouseholdCard({ member, onOpen }: { member: Member; onOpen: () => void 
           <span>Strain</span><strong>{member.strain ?? "—"}</strong>
         </div>
       </div>
+      {ouraIssue && <p className="muted">{ouraIssue.message}</p>}
       <button className="detail-link" onClick={onOpen}>View day detail <span aria-hidden="true">→</span></button>
     </article>
   );
 }
 
-function CardsView({ visibleMembers, onOpen }: { visibleMembers: Member[]; onOpen: (member: Member) => void }) {
+function CardsView({ visibleMembers, issues, onOpen }: { visibleMembers: Member[]; issues: DataIssue[]; onOpen: (member: Member) => void }) {
   return (
     <section className="cards-grid" aria-label="Household daily cards">
       {visibleMembers.map((member) => (
-        <HouseholdCard key={member.id} member={member} onOpen={() => onOpen(member)} />
+        <HouseholdCard key={member.id} member={member} issues={issues} onOpen={() => onOpen(member)} />
       ))}
     </section>
   );
@@ -217,7 +222,7 @@ function Delta({ value, unit, inverse = false }: { value: number | null; unit: s
   return <p className={favorable ? "positive" : "negative"}>{Math.abs(value)}{unit} {value >= 0 ? "above" : "below"} baseline</p>;
 }
 
-function DayDetail({ member, onBack }: { member: Member; onBack: () => void }) {
+function DayDetail({ member, dateLabel, issues, onBack }: { member: Member; dateLabel: string; issues: DataIssue[]; onBack: () => void }) {
   const readinessDelta = member.readiness === null || member.readinessAverage === null
     ? null : member.readiness - member.readinessAverage;
   const stageTotals = member.stages.reduce<Record<string, number>>((totals, item) => {
@@ -228,7 +233,7 @@ function DayDetail({ member, onBack }: { member: Member; onBack: () => void }) {
     <main className="detail-page">
       <header className="detail-header">
         <button className="back" onClick={onBack} aria-label="Back to household dashboard">←</button>
-        <div><h1>{member.name}</h1><p>Monday, August 10 · <ProviderLabel member={member} /></p></div>
+        <div><h1>{member.name}</h1><p>{dateLabel} · <ProviderLabel member={member} /></p></div>
       </header>
 
       <section className="panel readiness-panel">
@@ -247,6 +252,12 @@ function DayDetail({ member, onBack }: { member: Member; onBack: () => void }) {
           ))}
         </div>
       </section>
+
+      {issues.filter((issue) => issue.memberId === member.id && issue.code !== "not_connected").map((issue) => (
+        <section className="panel missing-row" key={`${issue.source}:${issue.code}`}>
+          <span className="device-icon" aria-hidden="true">◇</span><div><h2>{issue.source === "whoop" ? "WHOOP" : "Oura"} needs refresh</h2><p>{issue.message}</p></div>
+        </section>
+      ))}
 
       <section className="panel sleep-panel">
         <div className="sleep-heading"><h2>Sleep</h2><p>{formatDuration(member.sleepMinutes)} · {member.sleepStart} – {member.sleepEnd}</p></div>
@@ -275,14 +286,14 @@ function DayDetail({ member, onBack }: { member: Member; onBack: () => void }) {
   );
 }
 
-export function WellnessDashboard({ members, dateLabel, mode = "mock" }: { members: Member[]; dateLabel: string; mode?: "mock" | "sites" }) {
+export function WellnessDashboard({ members, dateLabel, mode = "mock", issues = [] }: { members: Member[]; dateLabel: string; mode?: "mock" | "sites"; issues?: DataIssue[] }) {
   const [view, setView] = useState<View>("cards");
   const [filter, setFilter] = useState("family");
   const [selected, setSelected] = useState<Member | null>(null);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const visibleMembers = filter === "family" ? members : members.filter((member) => member.id === filter);
 
-  if (selected) return <DayDetail member={selected} onBack={() => setSelected(null)} />;
+  if (selected) return <DayDetail member={selected} dateLabel={dateLabel} issues={issues} onBack={() => setSelected(null)} />;
 
   return (
     <main className="dashboard-shell">
@@ -294,7 +305,7 @@ export function WellnessDashboard({ members, dateLabel, mode = "mock" }: { membe
         </div>
       </header>
       <SegmentedControl view={view} onChange={setView} />
-      {view === "cards" ? <CardsView visibleMembers={visibleMembers} onOpen={setSelected} /> : <TimelineView visibleMembers={visibleMembers} onOpen={setSelected} />}
+      {view === "cards" ? <CardsView visibleMembers={visibleMembers} issues={issues} onOpen={setSelected} /> : <TimelineView visibleMembers={visibleMembers} onOpen={setSelected} />}
       {connectionsOpen && <ConnectionPanel members={members} onClose={() => setConnectionsOpen(false)} />}
     </main>
   );
