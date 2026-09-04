@@ -54,8 +54,9 @@ button { color: inherit; }
 .dashboard-header h1, .detail-header h1 { margin: 0; font-size: 34px; line-height: 1.05; letter-spacing: -.035em; }
 .dashboard-header p, .detail-header p { margin: 10px 0 0; color: var(--muted); font-size: 20px; font-weight: 600; }
 
-.member-filter { display: flex; align-items: center; gap: 10px; color: var(--muted); font-weight: 650; }
-.member-filter select { min-width: 150px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); padding: 11px 38px 11px 14px; color: var(--ink); }
+.member-filter, .date-filter { display: flex; align-items: center; gap: 10px; color: var(--muted); font-weight: 650; }
+.member-filter select, .date-filter select { min-width: 150px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); padding: 11px 38px 11px 14px; color: var(--ink); }
+.date-filter select { min-width: 172px; }
 .header-actions { display: flex; align-items: center; gap: 14px; }
 .manage-connections, .provider-link, .connection-member button, .quiet-button { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); padding: 11px 15px; font-weight: 700; cursor: pointer; text-decoration: none; }
 .manage-connections:hover, .provider-link:hover, .connection-member button:hover { border-color: var(--ink); }
@@ -100,6 +101,10 @@ button { color: inherit; }
 .segmented button.active { background: var(--surface); color: var(--ink); box-shadow: 0 1px 5px #24282112; }
 
 .cards-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+.empty-state { margin: -24px 0 24px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); padding: 20px 24px; }
+.empty-state h2 { margin: 0 0 5px; font-size: 19px; }
+.empty-state p, .period-note { margin: 0; color: var(--muted); font-size: 17px; line-height: 1.45; }
+.period-note { margin-top: 24px; border-top: 1px solid var(--line); padding-top: 20px; }
 
 .household-card, .panel {
   position: relative;
@@ -220,11 +225,13 @@ button { color: inherit; }
   .manage-connections { padding: 9px 12px; font-size: 14px; }
   .dashboard-header h1, .detail-header h1 { font-size: 28px; }
   .dashboard-header p { max-width: 100px; margin-top: 8px; font-size: 17px; line-height: 1.15; }
-  .member-filter { font-size: 0; }
-  .member-filter select { min-width: 115px; padding: 10px 32px 10px 12px; font-size: 16px; }
+  .member-filter, .date-filter { font-size: 0; }
+  .member-filter select, .date-filter select { min-width: 115px; padding: 10px 32px 10px 12px; font-size: 16px; }
+  .date-filter select { min-width: 150px; }
   .segmented { width: 100%; margin: 8px 0 30px; }
   .segmented button { padding: 11px; font-size: 18px; }
   .cards-grid { gap: 14px; }
+  .empty-state { margin: -14px 0 18px; padding: 17px 18px; }
   .household-card { min-height: 278px; border-radius: 20px; padding: 28px 28px 22px; }
   .avatar { width: 58px; height: 58px; font-size: 20px; }
   .member-heading { gap: 16px; }

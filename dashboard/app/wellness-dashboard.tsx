@@ -137,11 +137,11 @@ function ProviderLabel({ member }: { member: Member }) {
   return <span>{hasOura && hasWhoop ? "Oura + Whoop" : hasOura ? "Oura only" : hasWhoop ? "Whoop only" : "No devices connected"}</span>;
 }
 
-function HouseholdCard({ member, issues, onOpen }: { member: Member; issues: DataIssue[]; onOpen: () => void }) {
+function HouseholdCard({ member, issues, isAverage, onOpen }: { member: Member; issues: DataIssue[]; isAverage: boolean; onOpen: () => void }) {
   const ouraIssue = issues.find((issue) => issue.memberId === member.id && issue.source === "oura" && issue.code !== "not_connected");
   return (
     <article className="household-card">
-      <button className="card-open" onClick={onOpen} aria-label={`View ${member.name}'s day`}>
+      <button className="card-open" onClick={onOpen} aria-label={`View ${member.name}'s ${isAverage ? "seven-day summary" : "day"}`}>
         <span aria-hidden="true">→</span>
       </button>
       <div className="member-heading">
@@ -167,22 +167,22 @@ function HouseholdCard({ member, issues, onOpen }: { member: Member; issues: Dat
         </div>
       </div>
       {ouraIssue && <p className="muted">{ouraIssue.message}</p>}
-      <button className="detail-link" onClick={onOpen}>View day detail <span aria-hidden="true">→</span></button>
+      <button className="detail-link" onClick={onOpen}>View {isAverage ? "7-day summary" : "day detail"} <span aria-hidden="true">→</span></button>
     </article>
   );
 }
 
-function CardsView({ visibleMembers, issues, onOpen }: { visibleMembers: Member[]; issues: DataIssue[]; onOpen: (member: Member) => void }) {
+function CardsView({ visibleMembers, issues, isAverage, onOpen }: { visibleMembers: Member[]; issues: DataIssue[]; isAverage: boolean; onOpen: (member: Member) => void }) {
   return (
     <section className="cards-grid" aria-label="Household daily cards">
       {visibleMembers.map((member) => (
-        <HouseholdCard key={member.id} member={member} issues={issues} onOpen={() => onOpen(member)} />
+        <HouseholdCard key={member.id} member={member} issues={issues} isAverage={isAverage} onOpen={() => onOpen(member)} />
       ))}
     </section>
   );
 }
 
-function TimelineView({ visibleMembers, onOpen }: { visibleMembers: Member[]; onOpen: (member: Member) => void }) {
+function TimelineView({ visibleMembers, historyDates, onOpen }: { visibleMembers: Member[]; historyDates: string[]; onOpen: (member: Member, date: string) => void }) {
   return (
     <section className="timeline-wrap" aria-label="Seven day readiness timeline">
       <div className="timeline-grid">
@@ -195,7 +195,7 @@ function TimelineView({ visibleMembers, onOpen }: { visibleMembers: Member[]; on
               <button
                 key={`${member.id}-${weekDays[index]}`}
                 className={`timeline-cell ${readinessTone(score)}`}
-                onClick={() => onOpen(member)}
+                onClick={() => onOpen(member, historyDates[index])}
                 aria-label={`${member.name}, ${weekDays[index]}, readiness ${score ?? "unavailable"}`}
                 title={score === null ? "Unavailable" : `Readiness ${score}`}
               >
@@ -223,7 +223,7 @@ function Delta({ value, unit, inverse = false }: { value: number | null; unit: s
   return <p className={favorable ? "positive" : "negative"}>{Math.abs(value)}{unit} {value >= 0 ? "above" : "below"} baseline</p>;
 }
 
-function DayDetail({ member, dateLabel, issues, onBack }: { member: Member; dateLabel: string; issues: DataIssue[]; onBack: () => void }) {
+function DayDetail({ member, dateLabel, issues, isAverage, onBack }: { member: Member; dateLabel: string; issues: DataIssue[]; isAverage: boolean; onBack: () => void }) {
   const readinessDelta = member.readiness === null || member.readinessAverage === null
     ? null : member.readiness - member.readinessAverage;
   const stageTotals = member.stages.reduce<Record<string, number>>((totals, item) => {
@@ -240,8 +240,8 @@ function DayDetail({ member, dateLabel, issues, onBack }: { member: Member; date
       <section className="panel readiness-panel">
         <div className={`score-ring ${readinessTone(member.readiness)}`}>{member.readiness ?? "—"}</div>
         <div className="readiness-copy">
-          <h2>Readiness{readinessDelta === null ? "" : ` · ${readinessDelta >= 0 ? "above usual" : "below usual"}`}</h2>
-          <p>{readinessDelta === null ? "Current readiness or baseline is unavailable." : `${readinessDelta >= 0 ? "Higher" : "Lower"} than ${member.name}'s 30-day average of ${member.readinessAverage}`}</p>
+          <h2>{isAverage ? "Average readiness" : "Readiness"}{readinessDelta === null ? "" : ` · ${readinessDelta >= 0 ? "above usual" : "below usual"}`}</h2>
+          <p>{readinessDelta === null ? "Readiness or baseline is unavailable." : `${readinessDelta >= 0 ? "Higher" : "Lower"} than ${member.name}'s 30-day average of ${member.readinessAverage}`}</p>
         </div>
         <div className="contributors">
           {member.contributors.map((contributor) => (
@@ -261,25 +261,31 @@ function DayDetail({ member, dateLabel, issues, onBack }: { member: Member; date
       ))}
 
       <section className="panel sleep-panel">
-        <div className="sleep-heading"><h2>Sleep</h2><p>{formatDuration(member.sleepMinutes)} · {member.sleepStart} – {member.sleepEnd}</p></div>
-        <div className="hypnogram" aria-label="Chronological sleep stages">
-          {member.stages.map((item, index) => <span key={index} className={stageColors[item.stage]} style={{ flex: item.minutes }} title={`${item.stage}, ${item.minutes} minutes`} />)}
-        </div>
-        <div className="time-labels"><span>{member.sleepStart}</span><span>{member.sleepEnd}</span></div>
-        <div className="stage-legend">
-          {(["REM", "Light", "Deep", "Awake"] as const).map((stage) => (
-            <div key={stage}><i className={stageColors[stage]} /><span>{stage} · {formatDuration(stageTotals[stage] ?? 0)}</span></div>
-          ))}
-        </div>
+        <div className="sleep-heading"><h2>{isAverage ? "Average sleep" : "Sleep"}</h2><p>{formatDuration(member.sleepMinutes)}{isAverage ? " per night" : ` · ${member.sleepStart} – ${member.sleepEnd}`}</p></div>
+        {isAverage ? (
+          <p className="period-note">Choose a single date to see sleep stages and bedtime details.</p>
+        ) : (
+          <>
+            <div className="hypnogram" aria-label="Chronological sleep stages">
+              {member.stages.map((item, index) => <span key={index} className={stageColors[item.stage]} style={{ flex: item.minutes }} title={`${item.stage}, ${item.minutes} minutes`} />)}
+            </div>
+            <div className="time-labels"><span>{member.sleepStart}</span><span>{member.sleepEnd}</span></div>
+            <div className="stage-legend">
+              {(["REM", "Light", "Deep", "Awake"] as const).map((stage) => (
+                <div key={stage}><i className={stageColors[stage]} /><span>{stage} · {formatDuration(stageTotals[stage] ?? 0)}</span></div>
+              ))}
+            </div>
+          </>
+        )}
       </section>
 
       <section className="stat-pair">
-        <article className="panel stat-card"><span>Overnight HRV</span><strong>{member.overnightHrv === null ? "—" : `${member.overnightHrv} ms`}</strong><Delta value={member.overnightHrv === null || member.hrvBaseline === null ? null : member.overnightHrv - member.hrvBaseline} unit="ms" /></article>
-        <article className="panel stat-card"><span>Sleep average heart rate</span><strong>{member.sleepAverageHeartRate === null ? "—" : `${member.sleepAverageHeartRate} bpm`}</strong><Delta value={member.sleepAverageHeartRate === null || member.heartRateBaseline === null ? null : member.sleepAverageHeartRate - member.heartRateBaseline} unit="bpm" inverse /></article>
+        <article className="panel stat-card"><span>{isAverage ? "Average overnight HRV" : "Overnight HRV"}</span><strong>{member.overnightHrv === null ? "—" : `${member.overnightHrv} ms`}</strong><Delta value={member.overnightHrv === null || member.hrvBaseline === null ? null : member.overnightHrv - member.hrvBaseline} unit="ms" /></article>
+        <article className="panel stat-card"><span>{isAverage ? "Average sleep heart rate" : "Sleep average heart rate"}</span><strong>{member.sleepAverageHeartRate === null ? "—" : `${member.sleepAverageHeartRate} bpm`}</strong><Delta value={member.sleepAverageHeartRate === null || member.heartRateBaseline === null ? null : member.sleepAverageHeartRate - member.heartRateBaseline} unit="bpm" inverse /></article>
       </section>
 
       {member.sources.includes("whoop") && member.recovery !== null ? (
-        <section className="panel whoop-row"><div><span>Whoop recovery</span><strong>{member.recovery}%</strong></div><div><span>Day strain</span><strong>{formatStrain(member.strain)}</strong></div></section>
+        <section className="panel whoop-row"><div><span>{isAverage ? "Average Whoop recovery" : "Whoop recovery"}</span><strong>{member.recovery}%</strong></div><div><span>{isAverage ? "Average day strain" : "Day strain"}</span><strong>{formatStrain(member.strain)}</strong></div></section>
       ) : !member.sources.includes("whoop") ? (
         <section className="panel missing-row"><span className="device-icon" aria-hidden="true">◇</span><div><h2>Whoop not connected</h2><p>Strain and recovery data will appear here once paired.</p></div></section>
       ) : null}
@@ -287,26 +293,51 @@ function DayDetail({ member, dateLabel, issues, onBack }: { member: Member; date
   );
 }
 
-export function WellnessDashboard({ members, dateLabel, mode = "mock", issues = [] }: { members: Member[]; dateLabel: string; mode?: "mock" | "sites"; issues?: DataIssue[] }) {
+export function WellnessDashboard({ members, title, dateLabel, dateOptions, selection, historyDates,
+  isAverage, emptyMessage, initialMemberId, mode = "mock", issues = [] }: {
+  members: Member[];
+  title: string;
+  dateLabel: string;
+  dateOptions: Array<{ value: string; label: string }>;
+  selection: string;
+  historyDates: string[];
+  isAverage: boolean;
+  emptyMessage: string | null;
+  initialMemberId?: string;
+  mode?: "mock" | "sites";
+  issues?: DataIssue[];
+}) {
   const [view, setView] = useState<View>("cards");
   const [filter, setFilter] = useState("family");
-  const [selected, setSelected] = useState<Member | null>(null);
+  const [selected, setSelected] = useState<Member | null>(() => members.find((member) => member.id === initialMemberId) ?? null);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const visibleMembers = filter === "family" ? members : members.filter((member) => member.id === filter);
 
-  if (selected) return <DayDetail member={selected} dateLabel={dateLabel} issues={issues} onBack={() => setSelected(null)} />;
+  function navigateToDate(value: string, member?: Member) {
+    const params = new URLSearchParams(window.location.search);
+    if (value === "last7") params.delete("date");
+    else params.set("date", value);
+    if (member) params.set("member", member.id);
+    else params.delete("member");
+    window.location.assign(`${window.location.pathname}${params.size ? `?${params}` : ""}`);
+  }
+
+  if (selected) return <DayDetail member={selected} dateLabel={dateLabel} issues={issues} isAverage={isAverage} onBack={() => setSelected(null)} />;
 
   return (
     <main className="dashboard-shell">
       <header className="dashboard-header">
-        <div><h1>Today</h1><p>{dateLabel}</p></div>
+        <div><h1>{title}</h1><p>{dateLabel}</p></div>
         <div className="header-actions">
           {mode === "sites" && <button className="manage-connections" onClick={() => setConnectionsOpen(true)}>Connect devices</button>}
+          <label className="date-filter">Date<select value={selection} onChange={(event) => navigateToDate(event.target.value)}>{dateOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
           <label className="member-filter">View<select value={filter} onChange={(event) => setFilter(event.target.value)}><option value="family">Family</option>{members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
         </div>
       </header>
       <SegmentedControl view={view} onChange={setView} />
-      {view === "cards" ? <CardsView visibleMembers={visibleMembers} issues={issues} onOpen={setSelected} /> : <TimelineView visibleMembers={visibleMembers} onOpen={setSelected} />}
+      {emptyMessage && <section className="empty-state" role="status"><h2>Data not ready</h2><p>{emptyMessage}</p></section>}
+      {view === "cards" ? <CardsView visibleMembers={visibleMembers} issues={issues} isAverage={isAverage} onOpen={setSelected} />
+        : <TimelineView visibleMembers={visibleMembers} historyDates={historyDates} onOpen={(member, date) => navigateToDate(date, member)} />}
       {connectionsOpen && <ConnectionPanel members={members} onClose={() => setConnectionsOpen(false)} />}
     </main>
   );

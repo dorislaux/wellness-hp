@@ -48,6 +48,7 @@ async function validAccessToken(connection: Connection) {
 async function syncOura(connection: Connection, date: string) {
   const accessToken = await validAccessToken(connection);
   const startDate = shiftDate(date, -29);
+  const stageStartDate = shiftDate(date, -6);
   const [readiness, sleeps] = await Promise.all([
     getOuraCollection("daily_readiness", accessToken, startDate, date),
     getOuraCollection("sleep", accessToken, startDate, date),
@@ -72,23 +73,28 @@ async function syncOura(connection: Connection, date: string) {
     } : {};
     records.push({ memberId: connection.memberId, localDate: cursor, provider: "oura" as const,
       status: normalized.status, ...persisted, fetchedAt: Date.now() });
-    if (normalized.status === "complete" && cursor === date)
-      await replaceSleepStages({ memberId: connection.memberId, localDate: date, stages: normalized.sleepStages });
+    if (normalized.status === "complete" && cursor >= stageStartDate)
+      await replaceSleepStages({ memberId: connection.memberId, localDate: cursor, stages: normalized.sleepStages });
   }
   await upsertDailyRecords(records);
 }
 
 async function syncWhoop(connection: Connection, date: string) {
   const accessToken = await validAccessToken(connection);
-  const start = `${shiftDate(date, -1)}T00:00:00.000Z`;
+  const startDate = shiftDate(date, -6);
+  const start = `${shiftDate(startDate, -1)}T00:00:00.000Z`;
   const [cycles, recoveries, sleeps] = await Promise.all([
     getWhoopCollection("cycles", accessToken, start, null),
     getWhoopCollection("recovery", accessToken, start, null),
     getWhoopCollection("sleep", accessToken, start, null),
   ]);
-  const normalized = normalizeWhoopDay({ date, cycles, recoveries, sleeps });
-  await upsertDailyRecords([{ memberId: connection.memberId, localDate: date, provider: "whoop",
-    status: normalized.status, ...(normalized.status === "complete" ? normalized : {}), fetchedAt: Date.now() }]);
+  const records = [];
+  for (let cursor = startDate; cursor <= date; cursor = shiftDate(cursor, 1)) {
+    const normalized = normalizeWhoopDay({ date: cursor, cycles, recoveries, sleeps });
+    records.push({ memberId: connection.memberId, localDate: cursor, provider: "whoop" as const,
+      status: normalized.status, ...(normalized.status === "complete" ? normalized : {}), fetchedAt: Date.now() });
+  }
+  await upsertDailyRecords(records);
 }
 
 function errorCode(error: unknown): "authorization_required" | "provider_unavailable" {

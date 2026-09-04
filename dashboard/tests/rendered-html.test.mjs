@@ -45,12 +45,21 @@ test("server-renders the dashboard for an allowed household user", async () => {
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.match(html, /<title>Household wellness<\/title>/i);
-  assert.match(html, /Today/);
+  assert.match(html, /7-day average/);
+  assert.match(html, /Last 7 days/);
   assert.match(html, /Alex/);
   assert.match(html, /Jordan/);
   assert.match(html, /Sam/);
   assert.match(html, /Timeline/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton/i);
+});
+
+test("renders a selected day from the date filter", async () => {
+  const response = await render("/?date=2026-08-10", authenticatedHeaders(ALLOWED_EMAIL));
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /Today/);
+  assert.match(html, /Monday, August 10/);
 });
 
 test("protects the session API with the same household boundary", async () => {
@@ -97,5 +106,7 @@ test("protects wellness data and disables caching", async () => {
   const snapshot = await allowed.json();
   assert.equal(snapshot.mode, "mock");
   assert.equal(snapshot.date, "2026-08-10");
+  assert.equal(snapshot.selection, "last7");
+  assert.equal(snapshot.isAverage, true);
   assert.deepEqual(snapshot.members.map((member) => member.id), ["alex", "jordan", "sam"]);
 });

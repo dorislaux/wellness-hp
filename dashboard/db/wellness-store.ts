@@ -61,7 +61,7 @@ export async function replaceSleepStages(input: { memberId: string; localDate: s
     await db.insert(sleepStageSegments).values(batch);
 }
 
-export async function readHouseholdDailyData(input: { householdId: string; startDate: string; endDate: string },
+export async function readHouseholdDailyData(input: { householdId: string; startDate: string; endDate: string; stageDate?: string },
   database?: Database) {
   const db = database ?? await getDb();
   const householdMembers = await db.select({ id: members.id, name: members.displayName, initials: members.initials,
@@ -72,8 +72,9 @@ export async function readHouseholdDailyData(input: { householdId: string; start
   const records = await db.select().from(dailySourceRecords).where(and(inArray(dailySourceRecords.memberId, ids),
     gte(dailySourceRecords.localDate, input.startDate), lte(dailySourceRecords.localDate, input.endDate)))
     .orderBy(desc(dailySourceRecords.localDate));
+  const stageDate = input.stageDate ?? input.endDate;
   const stages = await db.select().from(sleepStageSegments).where(and(inArray(sleepStageSegments.memberId, ids),
-    eq(sleepStageSegments.localDate, input.endDate), eq(sleepStageSegments.provider, "oura")))
+    eq(sleepStageSegments.localDate, stageDate), eq(sleepStageSegments.provider, "oura")))
     .orderBy(asc(sleepStageSegments.position));
   return { members: householdMembers, records, stages };
 }
