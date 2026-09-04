@@ -1,9 +1,11 @@
 import { and, asc, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { getDb, type Database } from "./index";
 import { dailySourceRecords, members, providerConnections, sleepStageSegments } from "./schema";
+import { writeBatches } from "./write-batches";
 
 export type DailyRecordInput = typeof dailySourceRecords.$inferInsert;
 export type SleepStageInput = typeof sleepStageSegments.$inferInsert;
+const SLEEP_STAGE_INSERT_BATCH_SIZE = 12;
 
 export async function listHouseholdConnections(householdId: string, database?: Database) {
   const db = database ?? await getDb();
@@ -53,8 +55,10 @@ export async function replaceSleepStages(input: { memberId: string; localDate: s
   await db.delete(sleepStageSegments).where(and(eq(sleepStageSegments.memberId, input.memberId),
     eq(sleepStageSegments.localDate, input.localDate), eq(sleepStageSegments.provider, "oura")));
   if (!input.stages.length) return;
-  await db.insert(sleepStageSegments).values(input.stages.map((stage, position) => ({ id: crypto.randomUUID(),
-    memberId: input.memberId, localDate: input.localDate, provider: "oura" as const, position, ...stage })));
+  const values = input.stages.map((stage, position) => ({ id: crypto.randomUUID(), memberId: input.memberId,
+    localDate: input.localDate, provider: "oura" as const, position, ...stage }));
+  for (const batch of writeBatches(values, SLEEP_STAGE_INSERT_BATCH_SIZE))
+    await db.insert(sleepStageSegments).values(batch);
 }
 
 export async function readHouseholdDailyData(input: { householdId: string; startDate: string; endDate: string },
