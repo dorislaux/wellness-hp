@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull, max } from "drizzle-orm";
 import type { ChatGPTUser } from "../app/chatgpt-auth";
 import { parseAllowedEmails } from "../app/household-auth";
 import { getDb, type Database } from "./index";
@@ -24,13 +24,40 @@ export async function getHouseholdContext(
   return row ?? null;
 }
 
-function initialsFor(name: string): string {
+export function initialsFor(name: string): string {
   return name
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join("") || "ME";
+}
+
+export async function createHouseholdMember(
+  householdId: string,
+  displayName: string,
+  database?: Database,
+) {
+  const name = displayName.trim().replace(/\s+/g, " ");
+  if (!name || name.length > 80) throw new Error("Member name is invalid.");
+  const db = database ?? await getDb();
+  const existing = await db.select({ id: members.id }).from(members)
+    .where(and(eq(members.householdId, householdId), eq(members.active, true)));
+  if (existing.length >= 12) throw new Error("Household member limit reached.");
+  const [order] = await db.select({ value: max(members.displayOrder) }).from(members)
+    .where(eq(members.householdId, householdId));
+  const displayOrder = (order?.value ?? -1) + 1;
+  const avatarKeys = ["green", "amber", "blue"] as const;
+  const member = {
+    id: crypto.randomUUID(),
+    householdId,
+    displayName: name,
+    initials: initialsFor(name),
+    avatarKey: avatarKeys[displayOrder % avatarKeys.length],
+    displayOrder,
+  };
+  await db.insert(members).values(member);
+  return { id: member.id, name: member.displayName, initials: member.initials, avatar: member.avatarKey };
 }
 
 export async function ensureOwnerHousehold(

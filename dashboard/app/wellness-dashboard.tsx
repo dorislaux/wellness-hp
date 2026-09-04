@@ -19,6 +19,7 @@ function ConnectionPanel({ members, onClose }: { members: Member[]; onClose: () 
   const [authorization, setAuthorization] = useState<Authorization | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [newMemberName, setNewMemberName] = useState("");
 
   useEffect(() => {
     if (!authorization || authorization.status !== "pending") return;
@@ -45,6 +46,24 @@ function ConnectionPanel({ members, onClose }: { members: Member[]; onClose: () 
     } catch {
       setError("Pairing is unavailable. Check the provider setup and try again.");
     } finally {
+      setBusy(null);
+    }
+  }
+
+  async function addMember(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const name = newMemberName.trim();
+    if (!name) return;
+    setBusy("new-member");
+    setError(null);
+    try {
+      const response = await fetch("/api/members", { method: "POST",
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify({ name }) });
+      if (!response.ok) throw new Error("Member could not be added.");
+      window.location.reload();
+    } catch {
+      setError("The household member could not be added. Try again.");
       setBusy(null);
     }
   }
@@ -77,6 +96,14 @@ function ConnectionPanel({ members, onClose }: { members: Member[]; onClose: () 
                 </div>
               </div>
             ))}
+            <form className="add-member" onSubmit={addMember}>
+              <label htmlFor="new-member-name">Add household member</label>
+              <div><input id="new-member-name" value={newMemberName} maxLength={80}
+                onChange={(event) => setNewMemberName(event.target.value)} placeholder="Name" />
+                <button disabled={busy !== null || !newMemberName.trim()} type="submit">
+                  {busy === "new-member" ? "Adding…" : "Add"}
+                </button></div>
+            </form>
           </div>
         )}
         {error && <p className="connection-error" role="alert">{error}</p>}

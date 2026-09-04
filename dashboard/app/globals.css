@@ -71,6 +71,12 @@ button { color: inherit; }
 .connection-member > div:last-child { display: flex; flex-wrap: wrap; justify-content: end; gap: 8px; }
 .connection-member button { padding: 9px 12px; font-size: 14px; }
 .connection-member button:disabled { cursor: wait; opacity: .55; }
+.add-member { display: grid; gap: 8px; border-top: 1px solid var(--line); padding-top: 18px; }
+.add-member label { color: var(--muted); font-size: 14px; font-weight: 700; }
+.add-member div { display: flex; gap: 8px; }
+.add-member input { min-width: 0; flex: 1; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.add-member button { border: 0; border-radius: 12px; background: var(--ink); color: var(--surface); padding: 10px 18px; font-weight: 700; }
+.add-member button:disabled { cursor: not-allowed; opacity: .5; }
 .authorization-step { display: grid; justify-items: center; text-align: center; }
 .authorization-step img { width: min(256px, 70vw); height: auto; margin-top: 4px; }
 .authorization-step h3 { margin: 12px 0 4px; font-size: 22px; }
