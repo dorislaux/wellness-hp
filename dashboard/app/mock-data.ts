@@ -141,6 +141,10 @@ export function formatDuration(minutes: number | null) {
   return `${hours}h ${rest}m`;
 }
 
+export function formatStrain(value: number | null) {
+  return value === null ? "—" : value.toFixed(1);
+}
+
 export function readinessTone(score: number | null): Tone | "missing" {
   if (score === null) return "missing";
   if (score >= 70) return "good";

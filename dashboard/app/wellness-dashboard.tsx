@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import {
   formatDuration,
+  formatStrain,
   readinessTone,
   weekDays,
   type Member,
@@ -162,7 +163,7 @@ function HouseholdCard({ member, issues, onOpen }: { member: Member; issues: Dat
         <div><span>HRV</span><strong>{member.overnightHrv === null ? "—" : `${member.overnightHrv} ms`}</strong></div>
         <div><span>Sleep</span><strong>{formatDuration(member.sleepMinutes)}</strong></div>
         <div className={member.strain === null ? "muted" : ""}>
-          <span>Strain</span><strong>{member.strain ?? "—"}</strong>
+          <span>Strain</span><strong>{formatStrain(member.strain)}</strong>
         </div>
       </div>
       {ouraIssue && <p className="muted">{ouraIssue.message}</p>}
@@ -278,7 +279,7 @@ function DayDetail({ member, dateLabel, issues, onBack }: { member: Member; date
       </section>
 
       {member.sources.includes("whoop") && member.recovery !== null ? (
-        <section className="panel whoop-row"><div><span>Whoop recovery</span><strong>{member.recovery}%</strong></div><div><span>Day strain</span><strong>{member.strain}</strong></div></section>
+        <section className="panel whoop-row"><div><span>Whoop recovery</span><strong>{member.recovery}%</strong></div><div><span>Day strain</span><strong>{formatStrain(member.strain)}</strong></div></section>
       ) : !member.sources.includes("whoop") ? (
         <section className="panel missing-row"><span className="device-icon" aria-hidden="true">◇</span><div><h2>Whoop not connected</h2><p>Strain and recovery data will appear here once paired.</p></div></section>
       ) : null}
