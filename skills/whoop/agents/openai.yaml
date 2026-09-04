@@ -1,0 +1,4 @@
+interface:
+  display_name: "WHOOP"
+  short_description: "Retrieve and analyze WHOOP health data"
+  default_prompt: "Use $whoop to inspect my WHOOP recovery, sleep, cycle, or workout data."

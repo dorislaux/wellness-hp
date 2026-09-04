@@ -124,6 +124,36 @@ To uninstall, remove only the symlinks that point to this checkout, then remove 
 
 ## Development
 
+### Docker development
+
+The development container uses Python 3.12 and mounts this checkout at
+`/workspace`. A separate Docker volume is reserved for future WHOOP
+configuration so credentials will not be stored in the repository or image.
+
+Build the image:
+
+```bash
+docker compose build
+```
+
+Open an interactive development shell:
+
+```bash
+docker compose run --rm whoop-dev
+```
+
+Verify Python without opening a shell:
+
+```bash
+docker compose run --rm whoop-dev python --version
+```
+
+Source changes made on macOS are immediately visible in the container. Port
+`8787` is published to localhost for the mock wellness backend; live WHOOP
+authentication is still disabled.
+
+### Oura development checks
+
 ```bash
 python3 -W error::ResourceWarning -m unittest -v scripts/test_oura.py
 python3 -m py_compile scripts/oura.py scripts/test_oura.py
