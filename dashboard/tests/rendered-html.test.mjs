@@ -77,3 +77,25 @@ test("protects the session API with the same household boundary", async () => {
     },
   });
 });
+
+test("protects wellness data and disables caching", async () => {
+  const anonymous = await render("/api/wellness", { accept: "application/json" });
+  assert.equal(anonymous.status, 401);
+
+  const denied = await render(
+    "/api/wellness",
+    { ...authenticatedHeaders("stranger@example.test"), accept: "application/json" },
+  );
+  assert.equal(denied.status, 403);
+
+  const allowed = await render(
+    "/api/wellness",
+    { ...authenticatedHeaders(ALLOWED_EMAIL), accept: "application/json" },
+  );
+  assert.equal(allowed.status, 200);
+  assert.equal(allowed.headers.get("cache-control"), "private, no-store");
+  const snapshot = await allowed.json();
+  assert.equal(snapshot.mode, "mock");
+  assert.equal(snapshot.date, "2026-08-10");
+  assert.deepEqual(snapshot.members.map((member) => member.id), ["alex", "jordan", "sam"]);
+});

@@ -1,8 +1,9 @@
-# vinext-starter
+# Household wellness dashboard
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+A private, allowlisted family dashboard that presents normalized Oura and WHOOP
+sleep, readiness, recovery, and strain data. It runs on
+[vinext](https://github.com/cloudflare/vinext) and is structured for ChatGPT
+Sites hosting.
 
 ## Prerequisites
 
@@ -16,14 +17,36 @@ npm run dev
 npm run build
 ```
 
+Mock data is the default. The page and `GET /api/wellness` require ChatGPT user
+identity headers and membership in `WELLNESS_ALLOWED_EMAILS`. Local development
+may use the explicitly gated identity values shown in `.env.example`.
+
+## Live data boundary
+
+Provider credentials never belong in browser code. In live mode, Site server
+routes call Oura and WHOOP over HTTPS and read normalized records from D1:
+
+```text
+WELLNESS_DATA_MODE=sites
+```
+
+See `LIVE-DATA-CONTRACT.md` for the required date/freshness behavior, API shape,
+and division of security responsibilities. The D1 reader, encrypted
+rotating-token store, provider routes, and member-specific QR pairing are
+implemented; hosted values still need to be provisioned before enabling Sites
+mode.
+
 This starter does not use `wrangler.jsonc`.
 
-## Included Shape
+## Project shape
 
 - edit site code under `app/`
 - `.openai/hosting.json` declares optional Sites D1 and R2 bindings
 - `vite.config.ts` simulates declared bindings for local development
-- `db/schema.ts` starts intentionally empty
+- `app/wellness-data.ts` is the mock/live server data switch
+- `app/api/wellness/route.ts` is the authenticated, non-cacheable Site endpoint
+- `db/schema.ts` defines the approved household, OAuth, credential, and daily-metric tables
+- `db/retention-policy.ts` records the approved application retention windows
 - `examples/d1/` contains an optional D1 example surface
 - `drizzle.config.ts` supports local migration generation when needed
 

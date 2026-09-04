@@ -25,6 +25,7 @@ services:
       WELLNESS_DEV_USER_EMAIL: "local@example.test"
       WELLNESS_DEV_USER_ID: "local-owner"
       WELLNESS_DEV_USER_NAME: "Local household owner"
+      WELLNESS_DATA_MODE: "mock"
     ports:
       - "127.0.0.1:3000:3000"
     volumes:

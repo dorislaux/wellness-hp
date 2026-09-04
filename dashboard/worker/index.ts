@@ -10,6 +10,16 @@ interface Env {
   WELLNESS_DEV_USER_ID?: string;
   WELLNESS_DEV_USER_EMAIL?: string;
   WELLNESS_DEV_USER_NAME?: string;
+  TOKEN_ENCRYPTION_KEY_V1?: string;
+  PROVIDER_SUBJECT_HASH_KEY_V1?: string;
+  OAUTH_STATE_HASH_KEY_V1?: string;
+  WELLNESS_TIMEZONE?: string;
+  WHOOP_CLIENT_ID?: string;
+  WHOOP_CLIENT_SECRET?: string;
+  WHOOP_REDIRECT_URI?: string;
+  OURA_CLIENT_ID?: string;
+  OURA_CLIENT_SECRET?: string;
+  OURA_REDIRECT_URI?: string;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {

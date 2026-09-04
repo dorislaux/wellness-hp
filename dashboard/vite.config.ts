@@ -11,6 +11,17 @@ const { d1, r2 } = hostingConfig;
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
 
+const localVars: Record<string, string> = {};
+if (process.env.WELLNESS_ENABLE_LOCAL_AUTH === "true") {
+  Object.assign(localVars, {
+    WELLNESS_ENABLE_LOCAL_AUTH: "true",
+    WELLNESS_ALLOWED_EMAILS: process.env.WELLNESS_ALLOWED_EMAILS ?? "",
+    WELLNESS_DEV_USER_ID: process.env.WELLNESS_DEV_USER_ID ?? "",
+    WELLNESS_DEV_USER_EMAIL: process.env.WELLNESS_DEV_USER_EMAIL ?? "",
+    WELLNESS_DEV_USER_NAME: process.env.WELLNESS_DEV_USER_NAME ?? "",
+  });
+}
+
 const localBindingConfig = {
   main: "./worker/index.ts",
   compatibility_flags: ["nodejs_compat"],
@@ -31,16 +42,7 @@ const localBindingConfig = {
         },
       ]
     : [],
-  vars:
-    process.env.WELLNESS_ENABLE_LOCAL_AUTH === "true"
-      ? {
-          WELLNESS_ENABLE_LOCAL_AUTH: "true",
-          WELLNESS_ALLOWED_EMAILS: process.env.WELLNESS_ALLOWED_EMAILS ?? "",
-          WELLNESS_DEV_USER_ID: process.env.WELLNESS_DEV_USER_ID ?? "",
-          WELLNESS_DEV_USER_EMAIL: process.env.WELLNESS_DEV_USER_EMAIL ?? "",
-          WELLNESS_DEV_USER_NAME: process.env.WELLNESS_DEV_USER_NAME ?? "",
-        }
-      : {},
+  vars: localVars,
 };
 
 export default defineConfig(async () => {

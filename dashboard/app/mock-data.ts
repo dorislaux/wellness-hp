@@ -8,7 +8,7 @@ export type SleepStage = {
 
 export type Contributor = {
   label: string;
-  score: number;
+  score: number | null;
   status: Tone;
 };
 
@@ -18,15 +18,15 @@ export type Member = {
   initials: string;
   avatar: "green" | "amber" | "blue";
   sources: Source[];
-  readiness: number;
-  readinessAverage: number;
+  readiness: number | null;
+  readinessAverage: number | null;
   recovery: number | null;
-  overnightHrv: number;
-  hrvBaseline: number;
-  sleepAverageHeartRate: number;
-  heartRateBaseline: number;
-  sleepMinutes: number;
-  deepSleepMinutes: number;
+  overnightHrv: number | null;
+  hrvBaseline: number | null;
+  sleepAverageHeartRate: number | null;
+  heartRateBaseline: number | null;
+  sleepMinutes: number | null;
+  deepSleepMinutes: number | null;
   strain: number | null;
   sleepStart: string;
   sleepEnd: string;
@@ -134,7 +134,8 @@ export const members: Member[] = [
 
 export const weekDays = ["Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Mon"];
 
-export function formatDuration(minutes: number) {
+export function formatDuration(minutes: number | null) {
+  if (minutes === null) return "—";
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
   return `${hours}h ${rest}m`;

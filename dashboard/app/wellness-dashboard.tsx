@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import Image from "next/image";
+import { useEffect, useState } from "react";
 import {
   formatDuration,
-  members,
   readinessTone,
   weekDays,
   type Member,
@@ -11,6 +11,79 @@ import {
 } from "./mock-data";
 
 type View = "cards" | "timeline";
+type Authorization = { id: string; memberId: string; provider: "oura" | "whoop";
+  status: "pending" | "authorized" | "denied" | "expired" | "failed";
+  authorizationUrl: string; qrCodeDataUrl: string; expiresAt: number };
+
+function ConnectionPanel({ members, onClose }: { members: Member[]; onClose: () => void }) {
+  const [authorization, setAuthorization] = useState<Authorization | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!authorization || authorization.status !== "pending") return;
+    const timer = window.setInterval(async () => {
+      const response = await fetch(`/api/members/${encodeURIComponent(authorization.memberId)}/connections/${authorization.provider}/authorizations/${encodeURIComponent(authorization.id)}`,
+        { headers: { Accept: "application/json" }, cache: "no-store" });
+      if (!response.ok) return;
+      const result = await response.json() as Pick<Authorization, "status">;
+      if (result.status === "authorized") window.location.reload();
+      else if (result.status !== "pending") setAuthorization((current) => current ? { ...current, status: result.status } : current);
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [authorization]);
+
+  async function start(memberId: string, provider: "oura" | "whoop") {
+    setBusy(`${memberId}:${provider}`);
+    setError(null);
+    try {
+      const response = await fetch(`/api/members/${encodeURIComponent(memberId)}/connections/${provider}/authorizations`,
+        { method: "POST", headers: { Accept: "application/json" } });
+      if (!response.ok) throw new Error("Pairing could not be started.");
+      const result = await response.json() as Omit<Authorization, "memberId">;
+      setAuthorization({ ...result, memberId });
+    } catch {
+      setError("Pairing is unavailable. Check the provider setup and try again.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <section className="connection-panel" role="dialog" aria-modal="true" aria-labelledby="connection-title">
+        <button className="modal-close" onClick={onClose} aria-label="Close connection settings">×</button>
+        <h2 id="connection-title">Connect devices</h2>
+        <p className="connection-intro">Choose the person first. Each provider account stays attached to that household member.</p>
+        {authorization ? (
+          <div className="authorization-step">
+            <Image src={authorization.qrCodeDataUrl} width={256} height={256} unoptimized alt={`QR code to authorize ${authorization.provider}`} />
+            <h3>{authorization.status === "pending" ? `Scan to connect ${authorization.provider === "whoop" ? "WHOOP" : "Oura"}` : "Authorization did not complete"}</h3>
+            <p>{authorization.status === "pending" ? "Open the camera on the provider owner's phone. This code expires in 10 minutes." : "Close this step and start a new authorization."}</p>
+            <a className="provider-link" href={authorization.authorizationUrl} target="_blank" rel="noreferrer">Open on this device</a>
+            <button className="quiet-button" onClick={() => setAuthorization(null)}>Back to members</button>
+          </div>
+        ) : (
+          <div className="connection-list">
+            {members.map((member) => (
+              <div className="connection-member" key={member.id}>
+                <div><strong>{member.name}</strong><span>{member.sources.length ? member.sources.map((source) => source === "whoop" ? "WHOOP" : "Oura").join(" + ") : "No devices connected"}</span></div>
+                <div>
+                  {(["oura", "whoop"] as const).map((provider) => (
+                    <button key={provider} disabled={busy !== null} onClick={() => start(member.id, provider)}>
+                      {busy === `${member.id}:${provider}` ? "Starting…" : `${member.sources.includes(provider) ? "Reconnect" : "Connect"} ${provider === "whoop" ? "WHOOP" : "Oura"}`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {error && <p className="connection-error" role="alert">{error}</p>}
+      </section>
+    </div>
+  );
+}
 
 function SegmentedControl({ view, onChange }: { view: View; onChange: (view: View) => void }) {
   return (
@@ -47,15 +120,15 @@ function HouseholdCard({ member, onOpen }: { member: Member; onOpen: () => void 
         </div>
       </div>
       <div className="card-primary">
-        <div><strong>{member.readiness}</strong><span>readiness</span></div>
+        <div><strong>{member.readiness ?? "—"}</strong><span>readiness</span></div>
         {member.recovery === null ? (
-          <p className="muted">No Whoop paired</p>
+          <p className="muted">{member.sources.includes("whoop") ? "Whoop needs refresh" : "No Whoop paired"}</p>
         ) : (
           <p>Recovery {member.recovery}%</p>
         )}
       </div>
       <div className="card-stats">
-        <div><span>HRV</span><strong>{member.overnightHrv} ms</strong></div>
+        <div><span>HRV</span><strong>{member.overnightHrv === null ? "—" : `${member.overnightHrv} ms`}</strong></div>
         <div><span>Sleep</span><strong>{formatDuration(member.sleepMinutes)}</strong></div>
         <div className={member.strain === null ? "muted" : ""}>
           <span>Strain</span><strong>{member.strain ?? "—"}</strong>
@@ -111,13 +184,15 @@ const stageColors: Record<SleepStage["stage"], string> = {
   Awake: "awake",
 };
 
-function Delta({ value, unit, inverse = false }: { value: number; unit: string; inverse?: boolean }) {
+function Delta({ value, unit, inverse = false }: { value: number | null; unit: string; inverse?: boolean }) {
+  if (value === null) return <p className="muted">Baseline unavailable</p>;
   const favorable = inverse ? value <= 0 : value >= 0;
   return <p className={favorable ? "positive" : "negative"}>{Math.abs(value)}{unit} {value >= 0 ? "above" : "below"} baseline</p>;
 }
 
 function DayDetail({ member, onBack }: { member: Member; onBack: () => void }) {
-  const readinessDelta = member.readiness - member.readinessAverage;
+  const readinessDelta = member.readiness === null || member.readinessAverage === null
+    ? null : member.readiness - member.readinessAverage;
   const stageTotals = member.stages.reduce<Record<string, number>>((totals, item) => {
     totals[item.stage] = (totals[item.stage] ?? 0) + item.minutes;
     return totals;
@@ -130,17 +205,17 @@ function DayDetail({ member, onBack }: { member: Member; onBack: () => void }) {
       </header>
 
       <section className="panel readiness-panel">
-        <div className={`score-ring ${readinessTone(member.readiness)}`}>{member.readiness}</div>
+        <div className={`score-ring ${readinessTone(member.readiness)}`}>{member.readiness ?? "—"}</div>
         <div className="readiness-copy">
-          <h2>Readiness · {readinessDelta >= 0 ? "above usual" : "below usual"}</h2>
-          <p>{readinessDelta >= 0 ? "Higher" : "Lower"} than {member.name}&apos;s 30-day average of {member.readinessAverage}</p>
+          <h2>Readiness{readinessDelta === null ? "" : ` · ${readinessDelta >= 0 ? "above usual" : "below usual"}`}</h2>
+          <p>{readinessDelta === null ? "Current readiness or baseline is unavailable." : `${readinessDelta >= 0 ? "Higher" : "Lower"} than ${member.name}'s 30-day average of ${member.readinessAverage}`}</p>
         </div>
         <div className="contributors">
           {member.contributors.map((contributor) => (
             <div className="contributor" key={contributor.label}>
               <span>{contributor.label}</span>
-              <div className="track"><i className={contributor.status} style={{ width: `${contributor.score}%` }} /></div>
-              <b className={contributor.status}>{contributor.status}</b>
+              <div className="track"><i className={contributor.status} style={{ width: `${contributor.score ?? 0}%` }} /></div>
+              <b className={contributor.score === null ? "muted" : contributor.status}>{contributor.score === null ? "unavailable" : contributor.status}</b>
             </div>
           ))}
         </div>
@@ -160,8 +235,8 @@ function DayDetail({ member, onBack }: { member: Member; onBack: () => void }) {
       </section>
 
       <section className="stat-pair">
-        <article className="panel stat-card"><span>Overnight HRV</span><strong>{member.overnightHrv} ms</strong><Delta value={member.overnightHrv - member.hrvBaseline} unit="ms" /></article>
-        <article className="panel stat-card"><span>Sleep average heart rate</span><strong>{member.sleepAverageHeartRate} bpm</strong><Delta value={member.sleepAverageHeartRate - member.heartRateBaseline} unit="bpm" inverse /></article>
+        <article className="panel stat-card"><span>Overnight HRV</span><strong>{member.overnightHrv === null ? "—" : `${member.overnightHrv} ms`}</strong><Delta value={member.overnightHrv === null || member.hrvBaseline === null ? null : member.overnightHrv - member.hrvBaseline} unit="ms" /></article>
+        <article className="panel stat-card"><span>Sleep average heart rate</span><strong>{member.sleepAverageHeartRate === null ? "—" : `${member.sleepAverageHeartRate} bpm`}</strong><Delta value={member.sleepAverageHeartRate === null || member.heartRateBaseline === null ? null : member.sleepAverageHeartRate - member.heartRateBaseline} unit="bpm" inverse /></article>
       </section>
 
       {member.sources.includes("whoop") ? (
@@ -173,10 +248,11 @@ function DayDetail({ member, onBack }: { member: Member; onBack: () => void }) {
   );
 }
 
-export function WellnessDashboard() {
+export function WellnessDashboard({ members, dateLabel, mode = "mock" }: { members: Member[]; dateLabel: string; mode?: "mock" | "sites" }) {
   const [view, setView] = useState<View>("cards");
   const [filter, setFilter] = useState("family");
   const [selected, setSelected] = useState<Member | null>(null);
+  const [connectionsOpen, setConnectionsOpen] = useState(false);
   const visibleMembers = filter === "family" ? members : members.filter((member) => member.id === filter);
 
   if (selected) return <DayDetail member={selected} onBack={() => setSelected(null)} />;
@@ -184,11 +260,15 @@ export function WellnessDashboard() {
   return (
     <main className="dashboard-shell">
       <header className="dashboard-header">
-        <div><h1>Today</h1><p>Monday, August 10</p></div>
-        <label className="member-filter">View<select value={filter} onChange={(event) => setFilter(event.target.value)}><option value="family">Family</option>{members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
+        <div><h1>Today</h1><p>{dateLabel}</p></div>
+        <div className="header-actions">
+          {mode === "sites" && <button className="manage-connections" onClick={() => setConnectionsOpen(true)}>Connect devices</button>}
+          <label className="member-filter">View<select value={filter} onChange={(event) => setFilter(event.target.value)}><option value="family">Family</option>{members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
+        </div>
       </header>
       <SegmentedControl view={view} onChange={setView} />
       {view === "cards" ? <CardsView visibleMembers={visibleMembers} onOpen={setSelected} /> : <TimelineView visibleMembers={visibleMembers} onOpen={setSelected} />}
+      {connectionsOpen && <ConnectionPanel members={members} onClose={() => setConnectionsOpen(false)} />}
     </main>
   );
 }

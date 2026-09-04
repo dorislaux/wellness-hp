@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { requireHouseholdUser } from "./household-auth";
 import { WellnessDashboard } from "./wellness-dashboard";
+import { getWellnessSnapshot } from "./wellness-data";
 
 export const dynamic = "force-dynamic";
 
@@ -10,8 +11,9 @@ export const metadata: Metadata = {
 };
 
 async function ProtectedDashboard() {
-  await requireHouseholdUser("/");
-  return <WellnessDashboard />;
+  const user = await requireHouseholdUser("/");
+  const snapshot = await getWellnessSnapshot(user);
+  return <WellnessDashboard members={snapshot.members} dateLabel={snapshot.dateLabel} mode={snapshot.mode} />;
 }
 
 export default function Home() {
