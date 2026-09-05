@@ -4,7 +4,7 @@ import { getWellnessSnapshot } from "../../wellness-data";
 
 const NO_STORE_HEADERS = { "Cache-Control": "private, no-store" };
 
-export async function GET(request: Request) {
+export async function GET() {
   const user = await getChatGPTUser();
   if (!user) {
     return Response.json(
@@ -20,7 +20,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const snapshot = await getWellnessSnapshot(user, new URL(request.url).searchParams.get("date") ?? undefined);
+    const snapshot = await getWellnessSnapshot(user, { refresh: true });
     return Response.json(snapshot, { headers: NO_STORE_HEADERS });
   } catch {
     // Avoid logging provider responses, access tokens, or health records.

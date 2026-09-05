@@ -10,16 +10,12 @@ export const metadata: Metadata = {
   description: "A calm daily view of household sleep and recovery.",
 };
 
-async function ProtectedDashboard({ selection, memberId }: { selection?: string; memberId?: string }) {
+async function ProtectedDashboard() {
   const user = await requireHouseholdUser("/");
-  const snapshot = await getWellnessSnapshot(user, selection);
-  return <WellnessDashboard members={snapshot.members} title={snapshot.title} dateLabel={snapshot.dateLabel}
-    dateOptions={snapshot.dateOptions} selection={snapshot.selection} historyDates={snapshot.historyDates}
-    isAverage={snapshot.isAverage} emptyMessage={snapshot.emptyMessage} initialMemberId={memberId}
-    mode={snapshot.mode} issues={snapshot.issues} />;
+  const snapshot = await getWellnessSnapshot(user);
+  return <WellnessDashboard initialSnapshot={snapshot} />;
 }
 
-export default async function Home({ searchParams }: { searchParams: Promise<{ date?: string; member?: string }> }) {
-  const { date, member } = await searchParams;
-  return <ProtectedDashboard selection={date} memberId={member} />;
+export default function Home() {
+  return <ProtectedDashboard />;
 }

@@ -10,6 +10,9 @@ export type HouseholdContext = {
   timezone: string;
 };
 
+export const HOUSEHOLD_AVATAR_COLORS = ["green", "amber", "blue", "plum", "coral", "teal"] as const;
+export type HouseholdAvatarColor = typeof HOUSEHOLD_AVATAR_COLORS[number];
+
 export async function getHouseholdContext(
   user: ChatGPTUser,
   database?: Database,
@@ -47,17 +50,35 @@ export async function createHouseholdMember(
   const [order] = await db.select({ value: max(members.displayOrder) }).from(members)
     .where(eq(members.householdId, householdId));
   const displayOrder = (order?.value ?? -1) + 1;
-  const avatarKeys = ["green", "amber", "blue"] as const;
   const member = {
     id: crypto.randomUUID(),
     householdId,
     displayName: name,
     initials: initialsFor(name),
-    avatarKey: avatarKeys[displayOrder % avatarKeys.length],
+    avatarKey: HOUSEHOLD_AVATAR_COLORS[displayOrder % HOUSEHOLD_AVATAR_COLORS.length] ?? "green",
     displayOrder,
   };
   await db.insert(members).values(member);
   return { id: member.id, name: member.displayName, initials: member.initials, avatar: member.avatarKey };
+}
+
+export async function updateHouseholdMember(
+  householdId: string,
+  memberId: string,
+  input: { displayName: string; avatar: string },
+  database?: Database,
+) {
+  const displayName = input.displayName.trim().replace(/\s+/g, " ");
+  if (!displayName || displayName.length > 80) throw new Error("Member name is invalid.");
+  if (!HOUSEHOLD_AVATAR_COLORS.includes(input.avatar as HouseholdAvatarColor))
+    throw new Error("Avatar color is invalid.");
+  const db = database ?? await getDb();
+  const [existing] = await db.select({ id: members.id }).from(members)
+    .where(and(eq(members.householdId, householdId), eq(members.id, memberId), eq(members.active, true))).limit(1);
+  if (!existing) throw new Error("Household member was not found.");
+  await db.update(members).set({ displayName, initials: initialsFor(displayName), avatarKey: input.avatar,
+    updatedAt: Date.now() }).where(and(eq(members.householdId, householdId), eq(members.id, memberId)));
+  return { id: memberId, name: displayName, initials: initialsFor(displayName), avatar: input.avatar };
 }
 
 export async function ensureOwnerHousehold(

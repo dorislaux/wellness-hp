@@ -81,7 +81,7 @@ async function syncOura(connection: Connection, date: string) {
 
 async function syncWhoop(connection: Connection, date: string) {
   const accessToken = await validAccessToken(connection);
-  const startDate = shiftDate(date, -6);
+  const startDate = shiftDate(date, -29);
   const start = `${shiftDate(startDate, -1)}T00:00:00.000Z`;
   const [cycles, recoveries, sleeps] = await Promise.all([
     getWhoopCollection("cycles", accessToken, start, null),

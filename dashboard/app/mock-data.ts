@@ -16,7 +16,7 @@ export type Member = {
   id: string;
   name: string;
   initials: string;
-  avatar: "green" | "amber" | "blue";
+  avatar: "green" | "amber" | "blue" | "plum" | "coral" | "teal";
   sources: Source[];
   readiness: number | null;
   readinessAverage: number | null;
@@ -136,18 +136,20 @@ export const weekDays = ["Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Mon"];
 
 export function formatDuration(minutes: number | null) {
   if (minutes === null) return "—";
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  return `${hours}h ${rest}m`;
+  return `${(minutes / 60).toFixed(1)} h`;
 }
 
 export function formatStrain(value: number | null) {
   return value === null ? "—" : value.toFixed(1);
 }
 
+export function formatMetric(value: number | null) {
+  return value === null ? "—" : value.toFixed(1);
+}
+
 export function readinessTone(score: number | null): Tone | "missing" {
   if (score === null) return "missing";
-  if (score >= 70) return "good";
-  if (score >= 55) return "fair";
+  if (score >= 85) return "good";
+  if (score >= 70) return "fair";
   return "low";
 }
