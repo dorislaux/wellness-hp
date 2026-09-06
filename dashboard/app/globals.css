@@ -185,6 +185,12 @@ button { color: inherit; }
 .card-stats div { display: grid; gap: 5px; }
 .card-stats span { color: var(--muted); font-size: 19px; }
 .card-stats strong { font-size: 21px; font-weight: 650; }
+.whoop-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 18px; border-top: 1px solid var(--line); padding-top: 18px; }
+.whoop-stats div { display: flex; align-items: baseline; gap: 8px; }
+.whoop-stats div:nth-child(2) { justify-content: end; text-align: right; }
+.whoop-stats span { color: var(--muted); font-size: 16px; }
+.whoop-stats strong { font-size: 18px; font-weight: 650; }
+.whoop-stats p { grid-column: 1 / -1; min-height: 22px; margin: 0; font-size: 16px; }
 .detail-link { position: absolute; left: 40px; bottom: 26px; border: 0; background: none; color: var(--quiet); padding: 0; font-size: 18px; font-weight: 650; cursor: pointer; }
 .card-open { display: none; }
 
@@ -200,6 +206,7 @@ button { color: inherit; }
 .timeline-cell.low { background: var(--timeline-low); }
 .timeline-cell.missing { background: var(--timeline-missing); }
 .timeline-note { margin: 16px 0 0; color: var(--muted); font-size: 18px; font-weight: 650; }
+.timeline-mobile { display: none; }
 .mobile-copy { display: none; }
 
 .detail-page { max-width: 1500px; }
@@ -284,27 +291,53 @@ button { color: inherit; }
   .date-filter select { min-width: 150px; }
   .segmented { width: 100%; margin: 8px 0 30px; }
   .segmented button { padding: 11px; font-size: 18px; }
-  .cards-grid { gap: 14px; }
+  .cards-grid { gap: 12px; }
   .empty-state { margin: -14px 0 18px; padding: 17px 18px; }
-  .household-card { min-height: 278px; border-radius: 20px; padding: 28px 28px 22px; }
-  .avatar { width: 58px; height: 58px; font-size: 20px; }
-  .member-heading { gap: 16px; }
-  .member-heading h2 { font-size: 23px; }
-  .member-heading span { display: block; max-width: 84px; font-size: 17px; line-height: 1.15; }
-  .card-primary strong { font-size: 54px; }
-  .card-primary span, .card-primary p { font-size: 17px; }
-  .card-stats { padding-top: 17px; }
+  .household-card { min-height: 0; border-radius: 18px; padding: 20px; }
+  .avatar { width: 48px; height: 48px; font-size: 17px; }
+  .member-heading { gap: 13px; padding-right: 42px; }
+  .member-heading h2 { margin-bottom: 2px; font-size: 22px; }
+  .member-heading span { display: block; font-size: 15px; line-height: 1.2; }
+  .card-primary { align-items: end; margin-top: 18px; }
+  .card-primary > div { gap: 7px; }
+  .card-primary strong { font-size: 48px; }
+  .card-primary span { font-size: 15px; }
+  .card-primary p { min-height: 0; max-width: 132px; margin: 0 0 5px; font-size: 15px; line-height: 1.25; text-align: right; }
+  .card-stats { gap: 8px; margin-top: 10px; padding-top: 14px; }
   .card-stats div:nth-child(2) { text-align: center; }
   .card-stats div:nth-child(3) { text-align: right; }
-  .card-stats span { font-size: 16px; }
-  .card-stats strong { font-size: 18px; }
-  .timeline-wrap { overflow-x: auto; margin-right: -14px; padding-right: 14px; }
-  .timeline-grid { min-width: 690px; grid-template-columns: 84px repeat(7, 1fr); gap: 0 5px; }
-  .weekday span { display: none; } .weekday b { display: inline; }
-  .timeline-cell { min-height: 49px; margin-bottom: 10px; }
-  .timeline-name { font-size: 16px; }
+  .card-stats span { font-size: 14px; }
+  .card-stats strong { font-size: 16px; }
+  .whoop-stats { margin-top: 13px; padding-top: 12px; }
+  .whoop-stats div { gap: 6px; }
+  .whoop-stats span { font-size: 14px; }
+  .whoop-stats strong { font-size: 16px; }
+  .whoop-stats p { min-height: 19px; font-size: 14px; }
+  .card-open { inset: 0; width: auto; height: auto; border-radius: inherit; font-size: 21px; text-align: initial; }
+  .card-open span { position: absolute; top: 25px; right: 26px; }
+  .card-open:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+  .timeline-wrap { overflow: visible; margin-right: -14px; }
+  .timeline-desktop, .timeline-desktop-note { display: none; }
+  .timeline-mobile { display: block; }
+  .timeline-week-strip { display: flex; gap: 10px; overflow-x: auto; padding: 2px 14px 12px 0; scroll-padding-left: 0; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; }
+  .timeline-week-strip::-webkit-scrollbar { display: none; }
+  .timeline-week { flex: 0 0 calc(100% - 14px); min-width: 0; scroll-snap-align: start; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); padding: 16px 14px 14px; box-shadow: 0 1px 1px var(--shadow); }
+  .timeline-week header { display: flex; align-items: center; justify-content: space-between; margin: 0 2px 14px; }
+  .timeline-week header strong { font-size: 16px; }
+  .timeline-week header span { color: var(--quiet); font-size: 13px; font-weight: 650; }
+  .timeline-week-grid { display: grid; grid-template-columns: 64px repeat(7, minmax(0, 1fr)); align-items: center; gap: 5px; }
+  .timeline-mobile-row { display: contents; }
+  .mobile-weekday { display: grid; justify-items: center; gap: 2px; color: var(--quiet); font-size: 11px; font-weight: 700; }
+  .mobile-weekday b { color: var(--muted); font-size: 12px; }
+  .timeline-mobile-name { overflow: hidden; padding-right: 3px; font-size: 13px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+  .timeline-mobile-cell, .timeline-mobile-empty { aspect-ratio: 1; min-width: 0; border-radius: 7px; }
+  .timeline-mobile-cell { display: grid; place-items: center; color: color-mix(in srgb, var(--ink) 74%, transparent); font-size: 11px; font-weight: 750; }
+  .timeline-mobile-cell.good { background: var(--green); }
+  .timeline-mobile-cell.fair { background: var(--amber); }
+  .timeline-mobile-cell.low { background: var(--timeline-low); }
+  .timeline-mobile-cell.missing { background: var(--timeline-missing); color: var(--quiet); }
+  .timeline-swipe-note { margin: 2px 14px 0 2px; color: var(--quiet); font-size: 12px; line-height: 1.4; }
   .desktop-copy { display: none; } .mobile-copy { display: inline; }
-  .timeline-note { font-size: 16px; }
   .detail-header { gap: 14px; }
   .detail-header p { margin-top: 6px; font-size: 16px; }
   .back { width: 38px; height: 38px; }

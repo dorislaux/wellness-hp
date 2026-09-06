@@ -27,6 +27,7 @@ export type Member = {
   heartRateBaseline: number | null;
   sleepMinutes: number | null;
   deepSleepMinutes: number | null;
+  dailyCalories: number | null;
   strain: number | null;
   sleepStart: string;
   sleepEnd: string;
@@ -79,6 +80,7 @@ export const members: Member[] = [
     heartRateBaseline: 54,
     sleepMinutes: 462,
     deepSleepMinutes: 96,
+    dailyCalories: 2340,
     strain: 9.8,
     sleepStart: "10:41pm",
     sleepEnd: "6:51am",
@@ -101,6 +103,7 @@ export const members: Member[] = [
     heartRateBaseline: 57,
     sleepMinutes: 350,
     deepSleepMinutes: 85,
+    dailyCalories: 2015,
     strain: null,
     sleepStart: "11:48pm",
     sleepEnd: "6:12am",
@@ -123,6 +126,7 @@ export const members: Member[] = [
     heartRateBaseline: 55,
     sleepMinutes: 415,
     deepSleepMinutes: 88,
+    dailyCalories: 2248,
     strain: 11.2,
     sleepStart: "11:07pm",
     sleepEnd: "6:38am",
@@ -145,6 +149,11 @@ export function formatStrain(value: number | null) {
 
 export function formatMetric(value: number | null) {
   return value === null ? "—" : value.toFixed(1);
+}
+
+export function formatCalories(value: number | null) {
+  if (value === null) return "—";
+  return new Intl.NumberFormat("en", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value);
 }
 
 export function readinessTone(score: number | null): Tone | "missing" {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { formatDuration, formatMetric, formatStrain, readinessTone } from "../app/mock-data.ts";
+import { formatCalories, formatDuration, formatMetric, formatStrain, readinessTone } from "../app/mock-data.ts";
 
 test("formats strain with exactly one digit after the decimal", () => {
   assert.equal(formatStrain(8.848939), "8.8");
@@ -15,6 +15,8 @@ test("formats dashboard measurements with exactly one digit after the decimal", 
   assert.equal(formatMetric(null), "—");
   assert.equal(formatDuration(462), "7.7 h");
   assert.equal(formatDuration(null), "—");
+  assert.equal(formatCalories(2340), "2,340.0");
+  assert.equal(formatCalories(null), "—");
 });
 
 test("uses the configured readiness timeline thresholds", () => {

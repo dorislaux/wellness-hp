@@ -38,6 +38,7 @@ export async function upsertDailyRecords(records: DailyRecordInput[], database?:
         sleepBalanceScore: item.sleepBalanceScore ?? null,
         bodyTemperatureContributorScore: item.bodyTemperatureContributorScore ?? null,
         previousDayActivityScore: item.previousDayActivityScore ?? null,
+        totalCalories: item.totalCalories ?? null,
         sleepAverageHeartRateBpm: item.sleepAverageHeartRateBpm ?? null,
         sleepAverageHrvMs: item.sleepAverageHrvMs ?? null,
         sleepTotalSeconds: item.sleepTotalSeconds ?? null, deepSleepSeconds: item.deepSleepSeconds ?? null,

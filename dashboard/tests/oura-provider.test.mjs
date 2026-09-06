@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildOuraAuthorizationUrl, decodeOuraSleepStages, exchangeOuraCode,
+import { buildOuraAuthorizationUrl, decodeOuraSleepStages, exchangeOuraCode, getOuraCollection,
   normalizeOuraDay, refreshOuraTokens } from "../app/providers/oura.ts";
 
 const config = { clientId: "oura-client", clientSecret: "oura-secret",
@@ -35,8 +35,19 @@ test("decodes and compresses Oura five-minute sleep stages", () => {
   ]);
 });
 
+test("requests Oura daily activity with an inclusive dashboard end date", async () => {
+  let requestedUrl;
+  const records = await getOuraCollection("daily_activity", "access-token", "2026-09-01", "2026-09-04",
+    async (url) => { requestedUrl = new URL(url); return Response.json({ data: [
+      { day: "2026-09-04", total_calories: 2340 }, { day: "2026-09-05", total_calories: 2200 },
+    ], next_token: null }); });
+  assert.equal(requestedUrl.searchParams.get("end_date"), "2026-09-05");
+  assert.deepEqual(records, [{ day: "2026-09-04", total_calories: 2340 }]);
+});
+
 test("normalizes only an exact Oura date and selects the main sleep", () => {
   const value = normalizeOuraDay({ date: "2026-09-04",
+    activities: [{ day: "2026-09-04", total_calories: 2340 }],
     readiness: [{ day: "2026-09-04", score: 81, contributors: { hrv_balance: 80,
       resting_heart_rate: 75, sleep_balance: 65, body_temperature: 90, previous_day_activity: 70 } }],
     sleeps: [{ day: "2026-09-04", type: "rest", total_sleep_duration: 800 },
@@ -47,6 +58,7 @@ test("normalizes only an exact Oura date and selects the main sleep", () => {
   assert.equal(value.status, "complete");
   assert.equal(value.readinessScore, 81);
   assert.equal(value.sleepAverageHrvMs, 44);
+  assert.equal(value.totalCalories, 2340);
   assert.equal(value.sleepStages.length, 4);
   assert.deepEqual(normalizeOuraDay({ date: "2026-09-05", readiness: [], sleeps: [] }), { status: "not_current" });
 });

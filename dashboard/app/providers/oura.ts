@@ -111,13 +111,14 @@ function addOneDay(date: string): string {
   return parsed.toISOString().slice(0, 10);
 }
 
-export async function getOuraCollection(resource: "daily_readiness" | "sleep", accessToken: string,
+export async function getOuraCollection(resource: "daily_activity" | "daily_readiness" | "sleep", accessToken: string,
   startDate: string, endDate: string, fetchImpl: Fetch = fetch): Promise<JsonRecord[]> {
   const records: JsonRecord[] = [];
   let nextToken: string | undefined;
   const seen = new Set<string>();
   for (let page = 0; page < 20; page += 1) {
-    const query = new URLSearchParams({ start_date: startDate, end_date: resource === "sleep" ? addOneDay(endDate) : endDate });
+    const query = new URLSearchParams({ start_date: startDate,
+      end_date: resource === "sleep" || resource === "daily_activity" ? addOneDay(endDate) : endDate });
     if (nextToken) query.set("next_token", nextToken);
     const payload = record(await ouraGet(resource, accessToken, query, fetchImpl), "Oura collection response was invalid.");
     if (!Array.isArray(payload.data)) throw new Error("Oura collection omitted data.");
@@ -147,8 +148,9 @@ export function decodeOuraSleepStages(value: unknown) {
   return segments;
 }
 
-export function normalizeOuraDay(input: { date: string; readiness: JsonRecord[]; sleeps: JsonRecord[] }) {
+export function normalizeOuraDay(input: { date: string; readiness: JsonRecord[]; sleeps: JsonRecord[]; activities?: JsonRecord[] }) {
   const readiness = input.readiness.find((item) => item.day === input.date);
+  const activity = input.activities?.find((item) => item.day === input.date);
   const sleep = input.sleeps.filter((item) => item.day === input.date && item.type === "long_sleep")
     .sort((a, b) => (finiteNumber(b.total_sleep_duration) ?? 0) - (finiteNumber(a.total_sleep_duration) ?? 0))[0];
   if (!readiness || !sleep) return { status: "not_current" as const };
@@ -159,6 +161,7 @@ export function normalizeOuraDay(input: { date: string; readiness: JsonRecord[];
     sleepBalanceScore: finiteNumber(contributors.sleep_balance),
     bodyTemperatureContributorScore: finiteNumber(contributors.body_temperature),
     previousDayActivityScore: finiteNumber(contributors.previous_day_activity),
+    totalCalories: finiteNumber(activity?.total_calories),
     sleepAverageHeartRateBpm: finiteNumber(sleep.average_heart_rate), sleepAverageHrvMs: finiteNumber(sleep.average_hrv),
     sleepTotalSeconds: finiteNumber(sleep.total_sleep_duration), deepSleepSeconds: finiteNumber(sleep.deep_sleep_duration),
     sleepStartAt: typeof sleep.bedtime_start === "string" ? Date.parse(sleep.bedtime_start) : null,

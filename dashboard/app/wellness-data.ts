@@ -154,6 +154,7 @@ function buildRangeView(input: {
       heartRateBaseline: average(ouraRecords.filter((item) => item.status === "complete").map((item) => item.sleepAverageHeartRateBpm)),
       sleepMinutes: average(activeOuraRecords.map((item) => item.sleepTotalSeconds === null ? null : item.sleepTotalSeconds / 60)),
       deepSleepMinutes: average(activeOuraRecords.map((item) => item.deepSleepSeconds === null ? null : item.deepSleepSeconds / 60)),
+      dailyCalories: average(activeOuraRecords.map((item) => item.totalCalories)),
       strain: average(activeWhoopRecords.map((item) => item.dayStrain)),
       sleepStart: "—",
       sleepEnd: "—",
@@ -171,7 +172,7 @@ function buildRangeView(input: {
   });
 
   const empty = liveMembers.every((member) => member.readiness === null && member.recovery === null &&
-    member.overnightHrv === null && member.sleepMinutes === null && member.strain === null);
+    member.overnightHrv === null && member.sleepMinutes === null && member.dailyCalories === null && member.strain === null);
   return {
     title: `${days}-day average`,
     dateLabel: periodLabel(input.date, days),

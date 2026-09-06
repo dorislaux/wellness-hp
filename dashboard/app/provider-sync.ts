@@ -49,13 +49,14 @@ async function syncOura(connection: Connection, date: string) {
   const accessToken = await validAccessToken(connection);
   const startDate = shiftDate(date, -29);
   const stageStartDate = shiftDate(date, -6);
-  const [readiness, sleeps] = await Promise.all([
+  const [activities, readiness, sleeps] = await Promise.all([
+    getOuraCollection("daily_activity", accessToken, startDate, date),
     getOuraCollection("daily_readiness", accessToken, startDate, date),
     getOuraCollection("sleep", accessToken, startDate, date),
   ]);
   const records = [];
   for (let cursor = startDate; cursor <= date; cursor = shiftDate(cursor, 1)) {
-    const normalized = normalizeOuraDay({ date: cursor, readiness, sleeps });
+    const normalized = normalizeOuraDay({ date: cursor, activities, readiness, sleeps });
     const persisted = normalized.status === "complete" ? {
       readinessScore: normalized.readinessScore,
       hrvBalanceScore: normalized.hrvBalanceScore,
@@ -63,6 +64,7 @@ async function syncOura(connection: Connection, date: string) {
       sleepBalanceScore: normalized.sleepBalanceScore,
       bodyTemperatureContributorScore: normalized.bodyTemperatureContributorScore,
       previousDayActivityScore: normalized.previousDayActivityScore,
+      totalCalories: normalized.totalCalories,
       sleepAverageHeartRateBpm: normalized.sleepAverageHeartRateBpm,
       sleepAverageHrvMs: normalized.sleepAverageHrvMs,
       sleepTotalSeconds: normalized.sleepTotalSeconds,

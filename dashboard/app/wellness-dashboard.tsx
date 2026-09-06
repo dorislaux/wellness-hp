@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import {
   formatDuration,
+  formatCalories,
   formatMetric,
   formatStrain,
   readinessTone,
@@ -208,18 +209,17 @@ function HouseholdCard({ member, issues, onOpen }: { member: Member; issues: Dat
       </div>
       <div className="card-primary">
         <div><strong>{formatMetric(member.readiness)}</strong><span>readiness</span></div>
-        {member.recovery === null ? (
-          <p className="muted">{member.sources.includes("whoop") ? "Whoop needs refresh" : "No Whoop paired"}</p>
-        ) : (
-          <p>Recovery {formatMetric(member.recovery)}%</p>
-        )}
       </div>
-      <div className="card-stats">
+      <div className="card-stats oura-stats">
         <div><span>HRV</span><strong>{member.overnightHrv === null ? "—" : `${formatMetric(member.overnightHrv)} ms`}</strong></div>
         <div><span>Sleep</span><strong>{formatDuration(member.sleepMinutes)}</strong></div>
-        <div className={member.strain === null ? "muted" : ""}>
-          <span>Strain</span><strong>{formatStrain(member.strain)}</strong>
-        </div>
+        <div className={member.dailyCalories === null ? "muted" : ""}><span>Calories</span><strong>{formatCalories(member.dailyCalories)}</strong></div>
+      </div>
+      <div className="whoop-stats">
+        {member.recovery === null && member.strain === null ? <p className="muted">{member.sources.includes("whoop") ? "WHOOP needs refresh" : "No WHOOP paired"}</p> : <>
+          <div><span>Recovery</span><strong>{member.recovery === null ? "—" : `${formatMetric(member.recovery)}%`}</strong></div>
+          <div><span>Strain</span><strong>{formatStrain(member.strain)}</strong></div>
+        </>}
       </div>
       {ouraIssue && <p className="muted">{ouraIssue.message}</p>}
       <button className="detail-link" onClick={onOpen}>View range summary <span aria-hidden="true">→</span></button>
@@ -238,9 +238,21 @@ function CardsView({ visibleMembers, issues, onOpen }: { visibleMembers: Member[
 }
 
 function TimelineView({ visibleMembers, historyDates }: { visibleMembers: Member[]; historyDates: string[] }) {
+  const weeks: Array<{ dates: Array<string | null>; startIndex: number; label: string }> = [];
+  const dateText = (date: string) => new Intl.DateTimeFormat("en", { month: "short", day: "numeric", timeZone: "UTC" })
+    .format(new Date(`${date}T12:00:00.000Z`));
+  const weekLabel = (start: string, end: string) => start.slice(0, 7) === end.slice(0, 7)
+    ? `${new Intl.DateTimeFormat("en", { month: "short", timeZone: "UTC" }).format(new Date(`${start}T12:00:00.000Z`))} ${Number(start.slice(-2))}–${Number(end.slice(-2))}`
+    : `${dateText(start)}–${dateText(end)}`;
+  for (let end = historyDates.length; end > 0; end -= 7) {
+    const start = Math.max(0, end - 7);
+    const pageDates = historyDates.slice(start, end);
+    weeks.push({ dates: [...Array<string | null>(7 - pageDates.length).fill(null), ...pageDates], startIndex: start,
+      label: weekLabel(pageDates[0], pageDates.at(-1) ?? pageDates[0]) });
+  }
   return (
     <section className="timeline-wrap" aria-label={`${historyDates.length}-day readiness timeline`}>
-      <div className="timeline-grid" style={{ gridTemplateColumns: `130px repeat(${historyDates.length}, minmax(52px, 1fr))`,
+      <div className="timeline-grid timeline-desktop" style={{ gridTemplateColumns: `130px repeat(${historyDates.length}, minmax(52px, 1fr))`,
         minWidth: `${130 + historyDates.length * 66}px` }}>
         <div />
         {historyDates.map((date) => {
@@ -266,7 +278,34 @@ function TimelineView({ visibleMembers, historyDates }: { visibleMembers: Member
           </div>
         ))}
       </div>
-      <p className="timeline-note">Cell color reflects daily Oura readiness: red 0–69, yellow 70–84, green 85–100.</p>
+      <div className="timeline-mobile">
+        <div className="timeline-week-strip">
+          {weeks.map((week, pageIndex) => <article className="timeline-week" key={week.label}>
+            <header><strong>{week.label}</strong><span>{pageIndex === 0 ? "Latest" : `${pageIndex + 1} of ${weeks.length}`}</span></header>
+            <div className="timeline-week-grid">
+              <div />
+              {week.dates.map((date, index) => date ? <div className="mobile-weekday" key={date}>
+                <span>{new Intl.DateTimeFormat("en", { weekday: "narrow", timeZone: "UTC" }).format(new Date(`${date}T12:00:00.000Z`))}</span>
+                <b>{new Date(`${date}T12:00:00.000Z`).getUTCDate()}</b>
+              </div> : <div key={`empty-heading-${index}`} />)}
+              {visibleMembers.map((member) => <div className="timeline-mobile-row" key={member.id}>
+                <div className="timeline-mobile-name">{member.name}</div>
+                {week.dates.map((date, index) => {
+                  if (!date) return <div className="timeline-mobile-empty" key={`empty-${member.id}-${index}`} aria-hidden="true" />;
+                  const historyIndex = week.startIndex + index - (7 - week.dates.filter(Boolean).length);
+                  const score = member.readinessHistory[historyIndex] ?? null;
+                  return <div key={`${member.id}-${date}`} className={`timeline-mobile-cell ${readinessTone(score)}`}
+                    role="img" aria-label={`${member.name}, ${date}, readiness ${formatMetric(score)}`}>
+                    <span>{score === null ? "—" : Math.round(score)}</span>
+                  </div>;
+                })}
+              </div>)}
+            </div>
+          </article>)}
+        </div>
+        <p className="timeline-swipe-note">{weeks.length > 1 ? "Swipe for earlier weeks · " : ""}Red 0–69 · Yellow 70–84 · Green 85–100</p>
+      </div>
+      <p className="timeline-note timeline-desktop-note">Cell color reflects daily Oura readiness: red 0–69, yellow 70–84, green 85–100.</p>
     </section>
   );
 }
