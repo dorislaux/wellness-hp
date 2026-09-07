@@ -1,5 +1,5 @@
 import type { ChatGPTUser } from "./chatgpt-auth";
-import { ensureOwnerHousehold } from "../db/household-store";
+import { requireHouseholdContext } from "../db/household-store";
 import { listHouseholdConnections, readHouseholdDailyData } from "../db/wellness-store";
 import { members as mockMembers, readinessTone, type Contributor, type Member } from "./mock-data";
 import { dateInTimezone, syncHousehold } from "./provider-sync";
@@ -186,7 +186,7 @@ function buildRangeView(input: {
 }
 
 async function sitesSnapshot(user: ChatGPTUser, refresh: boolean): Promise<WellnessSnapshot> {
-  const household = await ensureOwnerHousehold(user);
+  const household = await requireHouseholdContext(user);
   const date = refresh
     ? await syncHousehold(household.householdId, household.timezone)
     : dateInTimezone(new Date(), household.timezone);

@@ -125,6 +125,31 @@ button { color: inherit; }
 .provider-link { background: var(--ink); color: var(--surface); }
 .quiet-button { margin-top: 10px; border: 0; color: var(--muted); }
 .connection-error { color: #a32525; }
+.household-access > p { margin: 0; color: var(--muted); line-height: 1.45; }
+.access-invite-form { display: grid; gap: 8px; margin-top: 16px; }
+.access-invite-form label { color: var(--muted); font-size: 14px; font-weight: 700; }
+.access-invite-form > div, .invite-result > div { display: flex; gap: 8px; }
+.access-invite-form input, .invite-result input, .onboarding-form input {
+  min-width: 0; flex: 1; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--surface); color: var(--ink); padding: 10px 12px;
+}
+.access-invite-form button, .invite-result button, .access-person button, .primary-action {
+  border: 0; border-radius: 12px; background: var(--ink); color: var(--surface);
+  padding: 10px 15px; font-weight: 700; cursor: pointer;
+}
+.access-invite-form button:disabled, .access-person button:disabled, .primary-action:disabled { cursor: wait; opacity: .5; }
+.invite-result { margin-top: 14px; border-radius: 14px; background: var(--subtle); padding: 14px; }
+.invite-result > p { margin: 4px 0 10px; color: var(--muted); font-size: 14px; line-height: 1.4; }
+.invite-result input { background: var(--surface); }
+.access-list { margin-top: 20px; }
+.access-list h4 { margin: 0 0 9px; font-size: 15px; }
+.access-person { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-top: 1px solid var(--line); padding: 12px 0; }
+.access-person > div:first-child { display: grid; gap: 3px; min-width: 0; }
+.access-person > div:last-child { display: flex; gap: 7px; }
+.access-person span { overflow: hidden; color: var(--muted); font-size: 13px; text-overflow: ellipsis; }
+.access-person button { padding: 8px 11px; font-size: 13px; }
+.access-person .quiet-access { border: 1px solid var(--line); background: transparent; color: var(--muted); }
+.access-empty { margin: 0; color: var(--quiet); font-size: 14px; }
 
 .segmented {
   display: grid;
@@ -268,6 +293,20 @@ button { color: inherit; }
 .access-card h1 { margin: 0; font-size: clamp(30px, 5vw, 44px); line-height: 1.08; letter-spacing: -.035em; }
 .access-card > p:not(.eyebrow) { margin: 20px 0 28px; color: var(--muted); font-size: 19px; line-height: 1.55; }
 .access-card a { color: var(--ink); font-weight: 700; text-underline-offset: 4px; }
+.onboarding-page { background: var(--canvas); }
+.onboarding-card { width: min(610px, 100%); padding: clamp(28px, 5vw, 46px); }
+.onboarding-card > p strong { color: var(--ink); }
+.onboarding-options { display: grid; gap: 12px; }
+.onboarding-options button { display: grid; gap: 5px; width: 100%; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--ink); padding: 18px; text-align: left; cursor: pointer; }
+.onboarding-options button:hover { border-color: var(--ink); }
+.onboarding-options strong { font-size: 17px; }
+.onboarding-options span { color: var(--muted); line-height: 1.4; }
+.onboarding-form { display: grid; gap: 10px; margin-top: 20px; }
+.onboarding-form > p { margin: 0 0 8px; color: var(--muted); font-size: 17px; line-height: 1.5; }
+.onboarding-form label { color: var(--muted); font-size: 14px; font-weight: 700; }
+.onboarding-form .primary-action { margin-top: 4px; }
+.onboarding-form .quiet-button { justify-self: center; }
+.onboarding-card > .primary-action { display: inline-block; margin-right: 14px; }
 
 @media (max-width: 980px) {
   .cards-grid { grid-template-columns: 1fr; }
@@ -370,6 +409,9 @@ button { color: inherit; }
   .member-editor .save-member { grid-column: 2; justify-self: start; }
   .connection-member { align-items: start; flex-direction: column; }
   .connection-member > div:last-child { justify-content: start; }
+  .access-invite-form > div, .invite-result > div { align-items: stretch; flex-direction: column; }
+  .access-person { align-items: start; }
+  .access-person > div:last-child { flex-wrap: wrap; justify-content: end; }
 }
 
 @media (prefers-reduced-motion: reduce) {

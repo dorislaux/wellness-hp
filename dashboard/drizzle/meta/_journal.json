@@ -15,6 +15,20 @@
       "when": 1788600651556,
       "tag": "0001_ambitious_master_chief",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788792598631,
+      "tag": "0002_yielding_doctor_spectrum",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1788792934784,
+      "tag": "0003_tan_wrecker",
+      "breakpoints": true
     }
   ]
 }

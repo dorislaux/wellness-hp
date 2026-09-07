@@ -1,7 +1,7 @@
-import { and, eq, lt } from "drizzle-orm";
+import { and, eq, isNotNull, lt } from "drizzle-orm";
 import { retentionPolicy } from "./retention-policy";
 import { getDb, type Database } from "./index";
-import { dailySourceRecords, members, oauthSessions, providerConnections, sleepStageSegments, syncAttempts } from "./schema";
+import { dailySourceRecords, householdInvitations, householdJoinRequests, members, oauthSessions, providerConnections, sleepStageSegments, syncAttempts } from "./schema";
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -16,6 +16,10 @@ export async function enforceRetention(localDate: string, now = Date.now(), data
   await db.batch([
     db.delete(oauthSessions).where(lt(oauthSessions.createdAt,
       now - retentionPolicy.oauthSessionCleanupHours * HOUR_MS)),
+    db.delete(householdInvitations).where(lt(householdInvitations.createdAt,
+      now - retentionPolicy.householdAccessAuditDays * 24 * HOUR_MS)),
+    db.delete(householdJoinRequests).where(and(isNotNull(householdJoinRequests.decidedAt),
+      lt(householdJoinRequests.decidedAt, now - retentionPolicy.householdAccessAuditDays * 24 * HOUR_MS))),
     db.delete(dailySourceRecords).where(lt(dailySourceRecords.localDate,
       shiftDate(localDate, -retentionPolicy.normalizedDailyMetricsDays))),
     db.delete(sleepStageSegments).where(lt(sleepStageSegments.localDate,

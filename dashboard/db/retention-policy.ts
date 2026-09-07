@@ -1,6 +1,8 @@
 export const retentionPolicy = Object.freeze({
   oauthSessionTtlMinutes: 10,
   oauthSessionCleanupHours: 24,
+  householdInvitationTtlDays: 7,
+  householdAccessAuditDays: 30,
   normalizedDailyMetricsDays: 365,
   sleepStageSegmentsDays: 90,
   syncAttemptsDays: 14,

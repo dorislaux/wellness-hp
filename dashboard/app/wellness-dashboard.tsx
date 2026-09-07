@@ -19,9 +19,125 @@ type Authorization = { id: string; memberId: string; provider: "oura" | "whoop";
   authorizationUrl: string; qrCodeDataUrl: string; expiresAt: number };
 const AVATAR_COLORS: Member["avatar"][] = ["green", "amber", "blue", "plum", "coral", "teal"];
 
-function SettingsPanel({ members, canManageHousehold, theme, onThemeChange, onMemberUpdated, onClose }: {
+type HouseholdAccessState = {
+  householdName: string;
+  viewers: Array<{ userId: string; email: string | null; displayName: string | null; joinedAt: number }>;
+  requests: Array<{ id: string; email: string; displayName: string; requestedAt: number }>;
+};
+
+function HouseholdAccessManager() {
+  const [access, setAccess] = useState<HouseholdAccessState | null>(null);
+  const [email, setEmail] = useState("");
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function loadAccess() {
+    const response = await fetch("/api/household/access", { headers: { Accept: "application/json" }, cache: "no-store" });
+    if (!response.ok) throw new Error("Household access could not be loaded.");
+    setAccess(await response.json() as HouseholdAccessState);
+  }
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/household/access", { headers: { Accept: "application/json" }, cache: "no-store", signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Household access could not be loaded.");
+        return response.json() as Promise<HouseholdAccessState>;
+      })
+      .then((result) => setAccess(result))
+      .catch((cause) => {
+        if (!(cause instanceof Error) || cause.name !== "AbortError") setError("Household access could not be loaded.");
+      });
+    return () => controller.abort();
+  }, []);
+
+  async function createInvitation(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!email.trim()) return;
+    setBusy("invite");
+    setError(null);
+    try {
+      const response = await fetch("/api/household/invitations", {
+        method: "POST",
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const result = await response.json() as { invitation?: { token: string }; error?: string };
+      if (!response.ok || !result.invitation) throw new Error(result.error ?? "invitation_unavailable");
+      setInviteLink(`${window.location.origin}/onboarding?invite=${encodeURIComponent(result.invitation.token)}`);
+      setEmail("");
+    } catch {
+      setError("The invitation could not be created. Check the email and try again.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function decide(requestId: string, decision: "approved" | "rejected") {
+    setBusy(`request:${requestId}`);
+    setError(null);
+    try {
+      const response = await fetch(`/api/household/join-requests/${encodeURIComponent(requestId)}`, {
+        method: "PATCH",
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify({ decision }),
+      });
+      if (!response.ok) throw new Error("Request could not be updated.");
+      await loadAccess();
+    } catch {
+      setError("The join request could not be updated.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function revoke(viewerId: string) {
+    setBusy(`viewer:${viewerId}`);
+    setError(null);
+    try {
+      const response = await fetch(`/api/household/viewers/${encodeURIComponent(viewerId)}`, { method: "DELETE", headers: { Accept: "application/json" } });
+      if (!response.ok) throw new Error("Viewer could not be removed.");
+      await loadAccess();
+    } catch {
+      setError("The viewer could not be removed.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return <div className="settings-section household-access">
+    <h3>Household access</h3>
+    <p>Invite a viewer to {access?.householdName ?? "this household"}. The Site administrator must also grant this email access to the private Site.</p>
+    <form className="access-invite-form" onSubmit={createInvitation}>
+      <label htmlFor="household-viewer-email">Viewer email</label>
+      <div><input id="household-viewer-email" type="email" maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} placeholder="friend@example.com" />
+        <button disabled={busy !== null || !email.trim()}>{busy === "invite" ? "Creating…" : "Create invite"}</button></div>
+    </form>
+    {inviteLink && <div className="invite-result" role="status"><strong>Invitation ready</strong><p>Send this private link to the invited email. It expires in seven days and still requires your approval.</p>
+      <div><input readOnly aria-label="Household invitation link" value={inviteLink} /><button type="button" onClick={() => navigator.clipboard.writeText(inviteLink)}>Copy</button></div></div>}
+    {access && <>
+      <div className="access-list"><h4>Requests awaiting approval</h4>
+        {access.requests.length ? access.requests.map((request) => <div className="access-person" key={request.id}>
+          <div><strong>{request.displayName}</strong><span>{request.email}</span></div>
+          <div><button disabled={busy !== null} onClick={() => decide(request.id, "approved")}>Approve</button><button className="quiet-access" disabled={busy !== null} onClick={() => decide(request.id, "rejected")}>Reject</button></div>
+        </div>) : <p className="access-empty">No pending requests.</p>}
+      </div>
+      <div className="access-list"><h4>Current viewers</h4>
+        {access.viewers.length ? access.viewers.map((viewer) => <div className="access-person" key={viewer.userId}>
+          <div><strong>{viewer.displayName ?? viewer.email ?? "Household viewer"}</strong>{viewer.email && <span>{viewer.email}</span>}</div>
+          <button className="quiet-access" disabled={busy !== null} onClick={() => revoke(viewer.userId)}>Remove</button>
+        </div>) : <p className="access-empty">No viewers have joined this household.</p>}
+      </div>
+    </>}
+    {error && <p className="connection-error" role="alert">{error}</p>}
+  </div>;
+}
+
+function SettingsPanel({ members, canManageHousehold, householdAccessEnabled, theme, onThemeChange, onMemberUpdated, onClose }: {
   members: Member[];
   canManageHousehold: boolean;
+  householdAccessEnabled: boolean;
   theme: ThemePreference;
   onThemeChange: (theme: ThemePreference) => void;
   onMemberUpdated: (member: Pick<Member, "id" | "name" | "initials" | "avatar">) => void;
@@ -131,7 +247,8 @@ function SettingsPanel({ members, canManageHousehold, theme, onThemeChange, onMe
             </div>;
           })}
         </div></div>}
-        <div className="settings-section"><h3>Device connections</h3><p className="connection-intro">Choose the person first. Each provider account stays attached to that household member.</p></div>
+        {canManageHousehold && householdAccessEnabled && <HouseholdAccessManager />}
+        {canManageHousehold && <><div className="settings-section"><h3>Device connections</h3><p className="connection-intro">Choose the person first. Each provider account stays attached to that household member.</p></div>
         {authorization ? (
           <div className="authorization-step">
             <Image src={authorization.qrCodeDataUrl} width={256} height={256} unoptimized alt={`QR code to authorize ${authorization.provider}`} />
@@ -154,16 +271,16 @@ function SettingsPanel({ members, canManageHousehold, theme, onThemeChange, onMe
                 </div>
               </div>
             ))}
-            {canManageHousehold && <form className="add-member" onSubmit={addMember}>
+            <form className="add-member" onSubmit={addMember}>
               <label htmlFor="new-member-name">Add household member</label>
               <div><input id="new-member-name" value={newMemberName} maxLength={80}
                 onChange={(event) => setNewMemberName(event.target.value)} placeholder="Name" />
                 <button disabled={busy !== null || !newMemberName.trim()} type="submit">
                   {busy === "new-member" ? "Adding…" : "Add"}
                 </button></div>
-            </form>}
+            </form>
           </div>
-        )}
+        )}</>}
         {error && <p className="connection-error" role="alert">{error}</p>}
       </section>
     </div>
@@ -447,6 +564,7 @@ export function WellnessDashboard({ initialSnapshot }: { initialSnapshot: Wellne
       {view === "cards" ? <CardsView visibleMembers={visibleMembers} issues={current.issues} onOpen={(member) => setSelectedId(member.id)} />
         : <TimelineView visibleMembers={visibleMembers} historyDates={current.historyDates} />}
       {settingsOpen && <SettingsPanel members={members} canManageHousehold={snapshot.canManageHousehold} theme={theme}
+        householdAccessEnabled={snapshot.mode === "sites"}
         onThemeChange={changeTheme} onMemberUpdated={updateMember} onClose={() => setSettingsOpen(false)} />}
     </main>
   );

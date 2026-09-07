@@ -71,6 +71,8 @@ must never be returned to the browser or written to application logs.
 
 The application constants in `db/retention-policy.ts` define these cleanup
 windows: OAuth attempts expire after 10 minutes and are removed within 24 hours;
+household invitations expire after 7 days and invitation/join-request audit
+records are removed after 30 days;
 normalized daily metrics are kept for 365 days; sleep-stage segments for 90
 days; sync diagnostics for 14 days; and disconnected connection metadata for 30
 days. Credentials are deleted immediately when a provider is disconnected.

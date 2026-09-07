@@ -15,7 +15,6 @@ const localVars: Record<string, string> = {};
 if (process.env.WELLNESS_ENABLE_LOCAL_AUTH === "true") {
   Object.assign(localVars, {
     WELLNESS_ENABLE_LOCAL_AUTH: "true",
-    WELLNESS_ALLOWED_EMAILS: process.env.WELLNESS_ALLOWED_EMAILS ?? "",
     WELLNESS_DEV_USER_ID: process.env.WELLNESS_DEV_USER_ID ?? "",
     WELLNESS_DEV_USER_EMAIL: process.env.WELLNESS_DEV_USER_EMAIL ?? "",
     WELLNESS_DEV_USER_NAME: process.env.WELLNESS_DEV_USER_NAME ?? "",

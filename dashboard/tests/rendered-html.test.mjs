@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 const ALLOWED_EMAIL = "owner@example.test";
-process.env.WELLNESS_ALLOWED_EMAILS = ALLOWED_EMAIL;
 
 async function worker() {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
@@ -34,13 +33,13 @@ test("redirects an anonymous visitor to ChatGPT sign-in", async () => {
   assert.equal(location.search, "?return_to=%2F");
 });
 
-test("redirects an authenticated non-household visitor", async () => {
+test("lets any authenticated local mock visitor use the fictional dashboard", async () => {
   const response = await render("/", authenticatedHeaders("stranger@example.test"));
-  assert.equal(response.status, 307);
-  assert.equal(new URL(response.headers.get("location")).pathname, "/access-denied");
+  assert.equal(response.status, 200);
+  assert.match(await response.text(), /7-day average/);
 });
 
-test("server-renders the dashboard for an allowed household user", async () => {
+test("server-renders the dashboard for an authenticated mock user", async () => {
   const response = await render("/", authenticatedHeaders(ALLOWED_EMAIL));
   assert.equal(response.status, 200);
   const html = await response.text();
@@ -66,15 +65,15 @@ test("ignores obsolete specific-date links and renders the default range", async
   assert.doesNotMatch(html, /Today/);
 });
 
-test("protects the session API with the same household boundary", async () => {
+test("protects the session API with ChatGPT authentication", async () => {
   const anonymous = await render("/api/session", { accept: "application/json" });
   assert.equal(anonymous.status, 401);
 
-  const denied = await render(
+  const signedIn = await render(
     "/api/session",
     { ...authenticatedHeaders("stranger@example.test"), accept: "application/json" },
   );
-  assert.equal(denied.status, 403);
+  assert.equal(signedIn.status, 200);
 
   const allowed = await render(
     "/api/session",
@@ -83,6 +82,7 @@ test("protects the session API with the same household boundary", async () => {
   assert.equal(allowed.status, 200);
   assert.deepEqual(await allowed.json(), {
     authenticated: true,
+    household: { status: "member", role: "owner" },
     user: {
       id: `user-${ALLOWED_EMAIL}`,
       email: ALLOWED_EMAIL,
@@ -95,11 +95,11 @@ test("protects wellness data and disables caching", async () => {
   const anonymous = await render("/api/wellness", { accept: "application/json" });
   assert.equal(anonymous.status, 401);
 
-  const denied = await render(
+  const signedIn = await render(
     "/api/wellness",
     { ...authenticatedHeaders("stranger@example.test"), accept: "application/json" },
   );
-  assert.equal(denied.status, 403);
+  assert.equal(signedIn.status, 200);
 
   const allowed = await render(
     "/api/wellness",

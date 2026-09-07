@@ -6,7 +6,6 @@ interface Env {
   ASSETS: Fetcher;
   DB: D1Database;
   WELLNESS_ENABLE_LOCAL_AUTH?: string;
-  WELLNESS_ALLOWED_EMAILS?: string;
   WELLNESS_DEV_USER_ID?: string;
   WELLNESS_DEV_USER_EMAIL?: string;
   WELLNESS_DEV_USER_NAME?: string;

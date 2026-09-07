@@ -1,6 +1,6 @@
 import { getChatGPTUser } from "../../chatgpt-auth";
-import { isAllowedHouseholdUser } from "../../household-auth";
 import { getWellnessSnapshot } from "../../wellness-data";
+import { getHouseholdContext } from "../../../db/household-store";
 
 const NO_STORE_HEADERS = { "Cache-Control": "private, no-store" };
 
@@ -12,9 +12,9 @@ export async function GET() {
       { status: 401, headers: NO_STORE_HEADERS },
     );
   }
-  if (!isAllowedHouseholdUser(user)) {
+  if ((process.env.WELLNESS_DATA_MODE ?? "mock") === "sites" && !(await getHouseholdContext(user))) {
     return Response.json(
-      { error: "household_access_denied" },
+      { error: "household_membership_required" },
       { status: 403, headers: NO_STORE_HEADERS },
     );
   }

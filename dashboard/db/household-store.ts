@@ -1,6 +1,5 @@
 import { and, asc, eq, isNull, max } from "drizzle-orm";
 import type { ChatGPTUser } from "../app/chatgpt-auth";
-import { parseAllowedEmails } from "../app/household-auth";
 import { getDb, type Database } from "./index";
 import { householdUsers, households, members } from "./schema";
 
@@ -25,6 +24,24 @@ export async function getHouseholdContext(
     .where(and(eq(householdUsers.siteUserId, user.userId), isNull(householdUsers.revokedAt)))
     .limit(1);
   return row ?? null;
+}
+
+export async function requireHouseholdContext(
+  user: ChatGPTUser,
+  database?: Database,
+): Promise<HouseholdContext> {
+  const db = database ?? await getDb();
+  const household = await getHouseholdContext(user, db);
+  if (!household) throw new Error("Household membership is required.");
+  await db.update(householdUsers).set({
+    email: user.email.trim().toLowerCase(),
+    displayName: (user.fullName ?? user.displayName).slice(0, 120),
+  }).where(and(
+    eq(householdUsers.householdId, household.householdId),
+    eq(householdUsers.siteUserId, user.userId),
+    isNull(householdUsers.revokedAt),
+  ));
+  return household;
 }
 
 export function initialsFor(name: string): string {
@@ -81,42 +98,23 @@ export async function updateHouseholdMember(
   return { id: memberId, name: displayName, initials: initialsFor(displayName), avatar: input.avatar };
 }
 
-export async function ensureOwnerHousehold(
+export async function createHouseholdForUser(
   user: ChatGPTUser,
+  input: { name: string; timezone: string },
   database?: Database,
 ): Promise<HouseholdContext> {
   const db = database ?? await getDb();
   const existing = await getHouseholdContext(user, db);
-  if (existing) return existing;
+  if (existing) throw new Error("The user already belongs to a household.");
 
-  const allowedEmails = [...parseAllowedEmails(process.env.WELLNESS_ALLOWED_EMAILS)];
-  const [ownerEmail] = allowedEmails;
-  const userEmail = user.email.trim().toLowerCase();
-  if (!allowedEmails.includes(userEmail)) {
-    throw new Error("Household access has not been granted.");
-  }
-
-  if (userEmail !== ownerEmail) {
-    const availableHouseholds = await db
-      .select({ householdId: households.id, timezone: households.timezone })
-      .from(households)
-      .limit(2);
-    if (availableHouseholds.length !== 1) {
-      throw new Error("Household membership has not been provisioned.");
-    }
-
-    const [household] = availableHouseholds;
-    await db.insert(householdUsers).values({
-      householdId: household.householdId,
-      siteUserId: user.userId,
-      role: "viewer",
-    }).onConflictDoNothing();
-
-    const provisioned = await getHouseholdContext(user, db);
-    if (!provisioned) {
-      throw new Error("Household membership has not been provisioned.");
-    }
-    return provisioned;
+  const householdName = input.name.trim().replace(/\s+/g, " ");
+  if (!householdName || householdName.length > 80) throw new Error("Household name is invalid.");
+  const timezone = input.timezone.trim();
+  if (!timezone || timezone.length > 64) throw new Error("Household timezone is invalid.");
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: timezone }).format(new Date());
+  } catch {
+    throw new Error("Household timezone is invalid.");
   }
 
   const householdId = crypto.randomUUID();
@@ -125,13 +123,15 @@ export async function ensureOwnerHousehold(
   await db.batch([
     db.insert(households).values({
       id: householdId,
-      name: "Family",
-      timezone: process.env.WELLNESS_TIMEZONE || "UTC",
+      name: householdName,
+      timezone,
     }),
     db.insert(householdUsers).values({
       householdId,
       siteUserId: user.userId,
       role: "owner",
+      email: user.email.trim().toLowerCase(),
+      displayName: (user.fullName ?? user.displayName).slice(0, 120),
     }),
     db.insert(members).values({
       id: memberId,
@@ -142,7 +142,7 @@ export async function ensureOwnerHousehold(
       displayOrder: 0,
     }),
   ]);
-  return { householdId, role: "owner", timezone: process.env.WELLNESS_TIMEZONE || "UTC" };
+  return { householdId, role: "owner", timezone };
 }
 
 export async function listHouseholdMembers(

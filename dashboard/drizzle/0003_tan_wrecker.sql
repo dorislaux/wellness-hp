@@ -1,0 +1,2 @@
+DROP INDEX `uq_household_users_site_user_id`;--> statement-breakpoint
+CREATE UNIQUE INDEX `uq_household_users_site_user_id` ON `household_users` (`site_user_id`) WHERE "household_users"."revoked_at" IS NULL;

@@ -26,13 +26,60 @@ export const householdUsers = sqliteTable(
     householdId: text("household_id").notNull().references(() => households.id, { onDelete: "cascade" }),
     siteUserId: text("site_user_id").notNull(),
     role: text("role", { enum: ["owner", "viewer"] }).notNull(),
+    email: text("email"),
+    displayName: text("display_name"),
     createdAt: integer("created_at").notNull().default(nowMs),
     revokedAt: integer("revoked_at"),
   },
   (table) => [
     primaryKey({ columns: [table.householdId, table.siteUserId] }),
-    uniqueIndex("uq_household_users_site_user_id").on(table.siteUserId),
+    uniqueIndex("uq_household_users_site_user_id").on(table.siteUserId).where(sql`${table.revokedAt} IS NULL`),
     check("ck_household_users_role", sql`${table.role} IN ('owner', 'viewer')`),
+  ],
+);
+
+export const householdInvitations = sqliteTable(
+  "household_invitations",
+  {
+    id: text("id").primaryKey(),
+    householdId: text("household_id").notNull().references(() => households.id, { onDelete: "cascade" }),
+    tokenDigest: text("token_digest").notNull(),
+    invitedEmail: text("invited_email").notNull(),
+    createdByUserId: text("created_by_user_id").notNull(),
+    expiresAt: integer("expires_at").notNull(),
+    claimedByUserId: text("claimed_by_user_id"),
+    claimedAt: integer("claimed_at"),
+    consumedAt: integer("consumed_at"),
+    revokedAt: integer("revoked_at"),
+    createdAt: integer("created_at").notNull().default(nowMs),
+  },
+  (table) => [
+    uniqueIndex("uq_household_invitations_token").on(table.tokenDigest),
+    index("idx_household_invitations_household_email").on(table.householdId, table.invitedEmail),
+    check("ck_household_invitations_expiry", sql`${table.expiresAt} > ${table.createdAt}`),
+  ],
+);
+
+export const householdJoinRequests = sqliteTable(
+  "household_join_requests",
+  {
+    id: text("id").primaryKey(),
+    householdId: text("household_id").notNull().references(() => households.id, { onDelete: "cascade" }),
+    invitationId: text("invitation_id").notNull().references(() => householdInvitations.id, { onDelete: "cascade" }),
+    requesterUserId: text("requester_user_id").notNull(),
+    requesterEmail: text("requester_email").notNull(),
+    requesterDisplayName: text("requester_display_name").notNull(),
+    status: text("status", { enum: ["pending", "approved", "rejected"] }).notNull().default("pending"),
+    decidedByUserId: text("decided_by_user_id"),
+    decidedAt: integer("decided_at"),
+    createdAt: integer("created_at").notNull().default(nowMs),
+  },
+  (table) => [
+    uniqueIndex("uq_household_join_requests_invitation").on(table.invitationId),
+    index("idx_household_join_requests_household_status").on(table.householdId, table.status),
+    index("idx_household_join_requests_requester").on(table.requesterUserId, table.status),
+    check("ck_household_join_requests_status", sql`${table.status} IN ('pending', 'approved', 'rejected')`),
+    check("ck_household_join_requests_decision", sql`(${table.status} = 'pending' AND ${table.decidedAt} IS NULL AND ${table.decidedByUserId} IS NULL) OR (${table.status} != 'pending' AND ${table.decidedAt} IS NOT NULL AND ${table.decidedByUserId} IS NOT NULL)`),
   ],
 );
 

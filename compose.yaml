@@ -21,7 +21,6 @@ services:
     init: true
     environment:
       WELLNESS_ENABLE_LOCAL_AUTH: "true"
-      WELLNESS_ALLOWED_EMAILS: "local@example.test"
       WELLNESS_DEV_USER_EMAIL: "local@example.test"
       WELLNESS_DEV_USER_ID: "local-owner"
       WELLNESS_DEV_USER_NAME: "Local household owner"

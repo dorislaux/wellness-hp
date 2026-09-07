@@ -1,6 +1,6 @@
 # Household wellness dashboard
 
-A private, allowlisted family dashboard that presents normalized Oura and WHOOP
+A private, multi-household dashboard that presents normalized Oura and WHOOP
 sleep, readiness, recovery, and strain data. It runs on
 [vinext](https://github.com/cloudflare/vinext) and is structured for ChatGPT
 Sites hosting.
@@ -17,9 +17,23 @@ npm run dev
 npm run build
 ```
 
-Mock data is the default. The page and `GET /api/wellness` require ChatGPT user
-identity headers and membership in `WELLNESS_ALLOWED_EMAILS`. Local development
-may use the explicitly gated identity values shown in `.env.example`.
+Mock data is the default. In live Sites mode, the page and `GET /api/wellness`
+require ChatGPT user identity headers and an active D1 household membership.
+New Site visitors create an isolated household or request to join one through
+an email-bound invitation that the household owner must approve. Local
+development may use the explicitly gated identity values shown in `.env.example`.
+
+## Household onboarding
+
+Sites access and household access are separate gates. The Site administrator
+first adds a tester to the Site's custom audience. On first sign-in, an
+unassigned tester can create an isolated household and become its owner, or use
+an email-bound household invitation to submit a join request. A join request
+does not grant data access until that household's owner approves it in Settings.
+
+Household owners can invite, approve, reject, and remove viewers. Viewers are
+read-only: they cannot add members, change member profiles, manage household
+access, or start provider authorization.
 
 ## Live data boundary
 
@@ -45,6 +59,8 @@ This starter does not use `wrangler.jsonc`.
 - `vite.config.ts` simulates declared bindings for local development
 - `app/wellness-data.ts` is the mock/live server data switch
 - `app/api/wellness/route.ts` is the authenticated, non-cacheable Site endpoint
+- `app/onboarding/` contains new-household and owner-approved join flows
+- `db/household-access-store.ts` owns invitation and viewer access operations
 - `db/schema.ts` defines the approved household, OAuth, credential, and daily-metric tables
 - `db/retention-policy.ts` records the approved application retention windows
 - `examples/d1/` contains an optional D1 example surface
