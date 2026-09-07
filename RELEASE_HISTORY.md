@@ -15,10 +15,11 @@ This project uses `1.XX` release numbers for product releases. ChatGPT Sites als
 | `1.09` | 9 | 2026-09-05 | `26cd900` | Added a seven-day average default, recent-date filtering, historical synchronization, and an empty-data message. |
 | `1.10` | 10 | 2026-09-05 | `fc5e0be` | Added preloaded 7/14/30-day ranges, sync status, system-aware dark mode, one-decimal metrics, revised readiness colors, and household appearance settings. |
 | `1.11` | 11 | 2026-09-06 | `4eeb800` | Added compact mobile cards with Oura daily calories, bottom-row WHOOP metrics, and weekly snap-scrolling mobile timelines. |
+| `1.12` | 12 | 2026-09-07 | `8a3bd13` | Added isolated multi-household onboarding, email-bound invitations, owner approval, read-only viewers, and household access management. |
 
 ## Numbering convention
 
-- The next release is `1.12`, corresponding to Sites version 12.
-- Increment the final two digits for each published release: `1.11`, `1.12`, and so on.
+- The next release is `1.13`, corresponding to Sites version 13.
+- Increment the final two digits for each published release: `1.12`, `1.13`, and so on.
 - Record a release here only after its Sites deployment succeeds.
 - Sites version numbers remain system-managed; this file is the canonical product-release history.
