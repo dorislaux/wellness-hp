@@ -1,0 +1,61 @@
+import { getChatGPTUser } from "../../../../../../chatgpt-auth";
+import { buildWhoopAuthorizationUrl, WHOOP_SCOPES } from "../../../../../../providers/whoop";
+import { canManageHouseholdMember, getHouseholdContext } from "../../../../../../../db/household-store";
+import { createOAuthSession } from "../../../../../../../db/oauth-session-store";
+import { createOpaqueOAuthState, hashOAuthState } from "../../../../../../provider-crypto";
+import QRCode from "qrcode";
+
+const NO_STORE_HEADERS = { "Cache-Control": "private, no-store" };
+const SESSION_TTL_MS = 10 * 60 * 1000;
+
+function requiredConfig(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} is not configured.`);
+  return value;
+}
+
+export async function POST(
+  _request: Request,
+  context: { params: Promise<{ memberId: string }> },
+) {
+  const user = await getChatGPTUser();
+  if (!user) return Response.json({ error: "authentication_required" }, { status: 401, headers: NO_STORE_HEADERS });
+  const household = await getHouseholdContext(user);
+  if (!household) return Response.json({ error: "household_membership_required" }, { status: 403, headers: NO_STORE_HEADERS });
+
+  try {
+    const { memberId } = await context.params;
+    if (!(await canManageHouseholdMember(household, user.userId, memberId))) {
+      return Response.json({ error: "member_not_found" }, { status: 404, headers: NO_STORE_HEADERS });
+    }
+
+    const state = createOpaqueOAuthState();
+    const id = crypto.randomUUID();
+    const expiresAt = Date.now() + SESSION_TTL_MS;
+    await createOAuthSession({
+      id,
+      memberId,
+      provider: "whoop",
+      stateDigest: await hashOAuthState(state, requiredConfig("OAUTH_STATE_HASH_KEY_V1")),
+      requestedScopes: WHOOP_SCOPES,
+      createdByUserId: user.userId,
+      expiresAt,
+    });
+    const authorizationUrl = buildWhoopAuthorizationUrl(
+      {
+        clientId: requiredConfig("WHOOP_CLIENT_ID"),
+        clientSecret: requiredConfig("WHOOP_CLIENT_SECRET"),
+        redirectUri: requiredConfig("WHOOP_REDIRECT_URI"),
+      },
+      state,
+    );
+    const qrCodeDataUrl = await QRCode.toDataURL(authorizationUrl, { width: 256, margin: 1, errorCorrectionLevel: "M" });
+    return Response.json(
+      { id, provider: "whoop", status: "pending", authorizationUrl, qrCodeDataUrl, expiresAt },
+      { status: 201, headers: NO_STORE_HEADERS },
+    );
+  } catch {
+    console.error("WHOOP authorization could not be started");
+    return Response.json({ error: "whoop_authorization_unavailable" }, { status: 503, headers: NO_STORE_HEADERS });
+  }
+}

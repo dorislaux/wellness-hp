@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 const ALLOWED_EMAIL = "owner@example.test";
-process.env.WELLNESS_ALLOWED_EMAILS = ALLOWED_EMAIL;
 
 async function worker() {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
@@ -34,18 +33,22 @@ test("redirects an anonymous visitor to ChatGPT sign-in", async () => {
   assert.equal(location.search, "?return_to=%2F");
 });
 
-test("redirects an authenticated non-household visitor", async () => {
+test("lets any authenticated local mock visitor use the fictional dashboard", async () => {
   const response = await render("/", authenticatedHeaders("stranger@example.test"));
-  assert.equal(response.status, 307);
-  assert.equal(new URL(response.headers.get("location")).pathname, "/access-denied");
+  assert.equal(response.status, 200);
+  assert.match(await response.text(), /7-day average/);
 });
 
-test("server-renders the dashboard for an allowed household user", async () => {
+test("server-renders the dashboard for an authenticated mock user", async () => {
   const response = await render("/", authenticatedHeaders(ALLOWED_EMAIL));
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.match(html, /<title>Household wellness<\/title>/i);
-  assert.match(html, /Today/);
+  assert.match(html, /7-day average/);
+  assert.match(html, /Last 7 days/);
+  assert.match(html, /Last 14 days/);
+  assert.match(html, /Last 30 days/);
+  assert.match(html, /Settings/);
   assert.match(html, /Alex/);
   assert.match(html, /Jordan/);
   assert.match(html, /Sam/);
@@ -53,15 +56,24 @@ test("server-renders the dashboard for an allowed household user", async () => {
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton/i);
 });
 
-test("protects the session API with the same household boundary", async () => {
+test("ignores obsolete specific-date links and renders the default range", async () => {
+  const response = await render("/?date=2026-08-10", authenticatedHeaders(ALLOWED_EMAIL));
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /7-day average/);
+  assert.match(html, /August 4 – August 10/);
+  assert.doesNotMatch(html, /Today/);
+});
+
+test("protects the session API with ChatGPT authentication", async () => {
   const anonymous = await render("/api/session", { accept: "application/json" });
   assert.equal(anonymous.status, 401);
 
-  const denied = await render(
+  const signedIn = await render(
     "/api/session",
     { ...authenticatedHeaders("stranger@example.test"), accept: "application/json" },
   );
-  assert.equal(denied.status, 403);
+  assert.equal(signedIn.status, 200);
 
   const allowed = await render(
     "/api/session",
@@ -70,10 +82,38 @@ test("protects the session API with the same household boundary", async () => {
   assert.equal(allowed.status, 200);
   assert.deepEqual(await allowed.json(), {
     authenticated: true,
+    household: { status: "member", role: "owner" },
     user: {
       id: `user-${ALLOWED_EMAIL}`,
       email: ALLOWED_EMAIL,
       displayName: ALLOWED_EMAIL,
     },
   });
+});
+
+test("protects wellness data and disables caching", async () => {
+  const anonymous = await render("/api/wellness", { accept: "application/json" });
+  assert.equal(anonymous.status, 401);
+
+  const signedIn = await render(
+    "/api/wellness",
+    { ...authenticatedHeaders("stranger@example.test"), accept: "application/json" },
+  );
+  assert.equal(signedIn.status, 200);
+
+  const allowed = await render(
+    "/api/wellness",
+    { ...authenticatedHeaders(ALLOWED_EMAIL), accept: "application/json" },
+  );
+  assert.equal(allowed.status, 200);
+  assert.equal(allowed.headers.get("cache-control"), "private, no-store");
+  const snapshot = await allowed.json();
+  assert.equal(snapshot.mode, "mock");
+  assert.equal(snapshot.date, "2026-08-10");
+  assert.deepEqual(snapshot.rangeOptions.map((option) => option.value), ["last7", "last14", "last30"]);
+  assert.equal(snapshot.ranges.last7.title, "7-day average");
+  assert.equal(snapshot.ranges.last7.historyDates.length, 7);
+  assert.equal(snapshot.ranges.last14.historyDates.length, 14);
+  assert.equal(snapshot.ranges.last30.historyDates.length, 30);
+  assert.deepEqual(snapshot.ranges.last7.members.map((member) => member.id), ["alex", "jordan", "sam"]);
 });

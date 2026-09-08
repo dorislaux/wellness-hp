@@ -1,0 +1,27 @@
+# Release history
+
+This project uses `1.XX` release numbers for product releases. ChatGPT Sites also assigns each saved deployment an immutable sequential version number. The two numbers map as follows:
+
+| Release | Sites version | Published | Repository commit | Summary |
+| --- | ---: | --- | --- | --- |
+| `1.01` | 1 | 2026-09-04 | `3423ba0` | Added the production Oura and WHOOP dashboard integration. |
+| `1.02` | 2 | 2026-09-04 | `ca1d088` | Accepted WHOOP timestamps that use the UTC timezone designator. |
+| `1.03` | 3 | 2026-09-04 | `8603a4a` | Added owner-managed household members and provider pairing by member. |
+| `1.04` | 4 | 2026-09-04 | `e672646` | Added current provider synchronization and connection-status states. |
+| `1.05` | 5 | 2026-09-04 | `6d1473a` | Batched Oura sleep-stage persistence for reliable D1 writes. |
+| `1.06` | 6 | 2026-09-04 | `3045227` | Handled live WHOOP collection responses and current-day normalization. |
+| `1.07` | 7 | 2026-09-05 | `ea2677c` | Formatted WHOOP strain consistently to one decimal place. |
+| `1.08` | 8 | 2026-09-05 | `1cd5aff` | Provisioned invited household viewers on their first authenticated visit. |
+| `1.09` | 9 | 2026-09-05 | `26cd900` | Added a seven-day average default, recent-date filtering, historical synchronization, and an empty-data message. |
+| `1.10` | 10 | 2026-09-05 | `fc5e0be` | Added preloaded 7/14/30-day ranges, sync status, system-aware dark mode, one-decimal metrics, revised readiness colors, and household appearance settings. |
+| `1.11` | 11 | 2026-09-06 | `4eeb800` | Added compact mobile cards with Oura daily calories, bottom-row WHOOP metrics, and weekly snap-scrolling mobile timelines. |
+| `1.12` | 12 | 2026-09-07 | `8a3bd13` | Added isolated multi-household onboarding, email-bound invitations, owner approval, read-only viewers, and household access management. |
+| `1.13` | 13 | 2026-09-08 | `9dc3de7` | Removed a requested beta household and its locally stored membership, provider credentials, and wellness history. |
+| `1.14` | 14 | 2026-09-08 | `36f123f` | Added automatic personal cards for approved joiners and restricted device authorization to each joiner's own card. |
+
+## Numbering convention
+
+- The next release is `1.15`, corresponding to Sites version 15.
+- Increment the final two digits for each published release: `1.14`, `1.15`, and so on.
+- Record a release here only after its Sites deployment succeeds.
+- Sites version numbers remain system-managed; this file is the canonical product-release history.

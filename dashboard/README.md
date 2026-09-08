@@ -1,8 +1,9 @@
-# vinext-starter
+# Household wellness dashboard
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+A private, multi-household dashboard that presents normalized Oura and WHOOP
+sleep, readiness, recovery, and strain data. It runs on
+[vinext](https://github.com/cloudflare/vinext) and is structured for ChatGPT
+Sites hosting.
 
 ## Prerequisites
 
@@ -16,14 +17,53 @@ npm run dev
 npm run build
 ```
 
+Mock data is the default. In live Sites mode, the page and `GET /api/wellness`
+require ChatGPT user identity headers and an active D1 household membership.
+New Site visitors create an isolated household or request to join one through
+an email-bound invitation that the household owner must approve. Local
+development may use the explicitly gated identity values shown in `.env.example`.
+
+## Household onboarding
+
+Sites access and household access are separate gates. The Site administrator
+first adds a tester to the Site's custom audience. On first sign-in, an
+unassigned tester can create an isolated household and become its owner, or use
+an email-bound household invitation to submit a join request. A join request
+does not grant data access until that household's owner approves it in Settings.
+
+Household owners can invite, approve, reject, and remove household members.
+Approval automatically creates a personal dashboard card for the joiner. A
+joiner can connect or reconnect Oura and WHOOP only for that personal card;
+they cannot add other cards, change household profiles, or manage access.
+
+## Live data boundary
+
+Provider credentials never belong in browser code. In live mode, Site server
+routes call Oura and WHOOP over HTTPS and read normalized records from D1:
+
+```text
+WELLNESS_DATA_MODE=sites
+```
+
+See `LIVE-DATA-CONTRACT.md` for the required date/freshness behavior, API shape,
+and division of security responsibilities. The D1 reader, encrypted
+rotating-token store, provider routes, and member-specific QR pairing are
+implemented; hosted values still need to be provisioned before enabling Sites
+mode.
+
 This starter does not use `wrangler.jsonc`.
 
-## Included Shape
+## Project shape
 
 - edit site code under `app/`
 - `.openai/hosting.json` declares optional Sites D1 and R2 bindings
 - `vite.config.ts` simulates declared bindings for local development
-- `db/schema.ts` starts intentionally empty
+- `app/wellness-data.ts` is the mock/live server data switch
+- `app/api/wellness/route.ts` is the authenticated, non-cacheable Site endpoint
+- `app/onboarding/` contains new-household and owner-approved join flows
+- `db/household-access-store.ts` owns invitation and viewer access operations
+- `db/schema.ts` defines the approved household, OAuth, credential, and daily-metric tables
+- `db/retention-policy.ts` records the approved application retention windows
 - `examples/d1/` contains an optional D1 example surface
 - `drizzle.config.ts` supports local migration generation when needed
 

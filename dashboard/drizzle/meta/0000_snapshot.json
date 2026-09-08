@@ -1,0 +1,997 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "656f76f3-a465-4761-a1f5-873c11152249",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "tables": {
+    "daily_source_records": {
+      "name": "daily_source_records",
+      "columns": {
+        "member_id": {
+          "name": "member_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "local_date": {
+          "name": "local_date",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "readiness_score": {
+          "name": "readiness_score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "hrv_balance_score": {
+          "name": "hrv_balance_score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "resting_heart_rate_contributor_score": {
+          "name": "resting_heart_rate_contributor_score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sleep_balance_score": {
+          "name": "sleep_balance_score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "body_temperature_contributor_score": {
+          "name": "body_temperature_contributor_score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "previous_day_activity_score": {
+          "name": "previous_day_activity_score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sleep_average_heart_rate_bpm": {
+          "name": "sleep_average_heart_rate_bpm",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sleep_average_hrv_ms": {
+          "name": "sleep_average_hrv_ms",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sleep_total_seconds": {
+          "name": "sleep_total_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "deep_sleep_seconds": {
+          "name": "deep_sleep_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sleep_start_at": {
+          "name": "sleep_start_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sleep_end_at": {
+          "name": "sleep_end_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "recovery_score": {
+          "name": "recovery_score",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "day_strain": {
+          "name": "day_strain",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "source_updated_at": {
+          "name": "source_updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "fetched_at": {
+          "name": "fetched_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "sanitized_error_code": {
+          "name": "sanitized_error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "daily_source_records_member_id_members_id_fk": {
+          "name": "daily_source_records_member_id_members_id_fk",
+          "tableFrom": "daily_source_records",
+          "tableTo": "members",
+          "columnsFrom": [
+            "member_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "daily_source_records_member_id_local_date_provider_pk": {
+          "columns": [
+            "member_id",
+            "local_date",
+            "provider"
+          ],
+          "name": "daily_source_records_member_id_local_date_provider_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "ck_daily_source_records_provider": {
+          "name": "ck_daily_source_records_provider",
+          "value": "\"daily_source_records\".\"provider\" IN ('oura', 'whoop')"
+        },
+        "ck_daily_source_records_status": {
+          "name": "ck_daily_source_records_status",
+          "value": "\"daily_source_records\".\"status\" IN ('complete', 'not_current', 'unavailable')"
+        },
+        "ck_daily_source_records_readiness": {
+          "name": "ck_daily_source_records_readiness",
+          "value": "\"daily_source_records\".\"readiness_score\" IS NULL OR \"daily_source_records\".\"readiness_score\" BETWEEN 0 AND 100"
+        },
+        "ck_daily_source_records_recovery": {
+          "name": "ck_daily_source_records_recovery",
+          "value": "\"daily_source_records\".\"recovery_score\" IS NULL OR \"daily_source_records\".\"recovery_score\" BETWEEN 0 AND 100"
+        },
+        "ck_daily_source_records_strain": {
+          "name": "ck_daily_source_records_strain",
+          "value": "\"daily_source_records\".\"day_strain\" IS NULL OR \"daily_source_records\".\"day_strain\" BETWEEN 0 AND 21"
+        },
+        "ck_daily_source_records_sleep_total": {
+          "name": "ck_daily_source_records_sleep_total",
+          "value": "\"daily_source_records\".\"sleep_total_seconds\" IS NULL OR \"daily_source_records\".\"sleep_total_seconds\" >= 0"
+        },
+        "ck_daily_source_records_deep_sleep": {
+          "name": "ck_daily_source_records_deep_sleep",
+          "value": "\"daily_source_records\".\"deep_sleep_seconds\" IS NULL OR (\"daily_source_records\".\"deep_sleep_seconds\" >= 0 AND (\"daily_source_records\".\"sleep_total_seconds\" IS NULL OR \"daily_source_records\".\"deep_sleep_seconds\" <= \"daily_source_records\".\"sleep_total_seconds\"))"
+        },
+        "ck_daily_source_records_sleep_window": {
+          "name": "ck_daily_source_records_sleep_window",
+          "value": "\"daily_source_records\".\"sleep_start_at\" IS NULL OR \"daily_source_records\".\"sleep_end_at\" IS NULL OR \"daily_source_records\".\"sleep_end_at\" > \"daily_source_records\".\"sleep_start_at\""
+        }
+      }
+    },
+    "household_users": {
+      "name": "household_users",
+      "columns": {
+        "household_id": {
+          "name": "household_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "site_user_id": {
+          "name": "site_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "uq_household_users_site_user_id": {
+          "name": "uq_household_users_site_user_id",
+          "columns": [
+            "site_user_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "household_users_household_id_households_id_fk": {
+          "name": "household_users_household_id_households_id_fk",
+          "tableFrom": "household_users",
+          "tableTo": "households",
+          "columnsFrom": [
+            "household_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "household_users_household_id_site_user_id_pk": {
+          "columns": [
+            "household_id",
+            "site_user_id"
+          ],
+          "name": "household_users_household_id_site_user_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "ck_household_users_role": {
+          "name": "ck_household_users_role",
+          "value": "\"household_users\".\"role\" IN ('owner', 'viewer')"
+        }
+      }
+    },
+    "households": {
+      "name": "households",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "timezone": {
+          "name": "timezone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "members": {
+      "name": "members",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "household_id": {
+          "name": "household_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "initials": {
+          "name": "initials",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "avatar_key": {
+          "name": "avatar_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "display_order": {
+          "name": "display_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "active": {
+          "name": "active",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "idx_members_household_order": {
+          "name": "idx_members_household_order",
+          "columns": [
+            "household_id",
+            "display_order"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "members_household_id_households_id_fk": {
+          "name": "members_household_id_households_id_fk",
+          "tableFrom": "members",
+          "tableTo": "households",
+          "columnsFrom": [
+            "household_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "ck_members_display_order": {
+          "name": "ck_members_display_order",
+          "value": "\"members\".\"display_order\" >= 0"
+        }
+      }
+    },
+    "oauth_sessions": {
+      "name": "oauth_sessions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "member_id": {
+          "name": "member_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "state_digest": {
+          "name": "state_digest",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "requested_scopes": {
+          "name": "requested_scopes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "created_by_user_id": {
+          "name": "created_by_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "consumed_at": {
+          "name": "consumed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "uq_oauth_sessions_provider_state": {
+          "name": "uq_oauth_sessions_provider_state",
+          "columns": [
+            "provider",
+            "state_digest"
+          ],
+          "isUnique": true
+        },
+        "idx_oauth_sessions_expiry": {
+          "name": "idx_oauth_sessions_expiry",
+          "columns": [
+            "expires_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "oauth_sessions_member_id_members_id_fk": {
+          "name": "oauth_sessions_member_id_members_id_fk",
+          "tableFrom": "oauth_sessions",
+          "tableTo": "members",
+          "columnsFrom": [
+            "member_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "ck_oauth_sessions_provider": {
+          "name": "ck_oauth_sessions_provider",
+          "value": "\"oauth_sessions\".\"provider\" IN ('oura', 'whoop')"
+        },
+        "ck_oauth_sessions_status": {
+          "name": "ck_oauth_sessions_status",
+          "value": "\"oauth_sessions\".\"status\" IN ('pending', 'authorized', 'denied', 'expired', 'failed')"
+        },
+        "ck_oauth_sessions_expiry": {
+          "name": "ck_oauth_sessions_expiry",
+          "value": "\"oauth_sessions\".\"expires_at\" > \"oauth_sessions\".\"created_at\""
+        }
+      }
+    },
+    "provider_connections": {
+      "name": "provider_connections",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "member_id": {
+          "name": "member_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "provider_subject_hash": {
+          "name": "provider_subject_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "granted_scopes": {
+          "name": "granted_scopes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "''"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'connecting'"
+        },
+        "connected_at": {
+          "name": "connected_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "disconnected_at": {
+          "name": "disconnected_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_attempt_at": {
+          "name": "last_attempt_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_success_at": {
+          "name": "last_success_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "uq_provider_connections_member_provider": {
+          "name": "uq_provider_connections_member_provider",
+          "columns": [
+            "member_id",
+            "provider"
+          ],
+          "isUnique": true
+        },
+        "uq_provider_connections_subject": {
+          "name": "uq_provider_connections_subject",
+          "columns": [
+            "provider",
+            "provider_subject_hash"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "provider_connections_member_id_members_id_fk": {
+          "name": "provider_connections_member_id_members_id_fk",
+          "tableFrom": "provider_connections",
+          "tableTo": "members",
+          "columnsFrom": [
+            "member_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "ck_provider_connections_provider": {
+          "name": "ck_provider_connections_provider",
+          "value": "\"provider_connections\".\"provider\" IN ('oura', 'whoop')"
+        },
+        "ck_provider_connections_status": {
+          "name": "ck_provider_connections_status",
+          "value": "\"provider_connections\".\"status\" IN ('connecting', 'connected', 'action_required', 'disconnected')"
+        }
+      }
+    },
+    "provider_credentials": {
+      "name": "provider_credentials",
+      "columns": {
+        "connection_id": {
+          "name": "connection_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "encrypted_token_set": {
+          "name": "encrypted_token_set",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "nonce": {
+          "name": "nonce",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "key_version": {
+          "name": "key_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "provider_credentials_connection_id_provider_connections_id_fk": {
+          "name": "provider_credentials_connection_id_provider_connections_id_fk",
+          "tableFrom": "provider_credentials",
+          "tableTo": "provider_connections",
+          "columnsFrom": [
+            "connection_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "ck_provider_credentials_key_version": {
+          "name": "ck_provider_credentials_key_version",
+          "value": "\"provider_credentials\".\"key_version\" > 0"
+        },
+        "ck_provider_credentials_expiry": {
+          "name": "ck_provider_credentials_expiry",
+          "value": "\"provider_credentials\".\"expires_at\" > 0"
+        }
+      }
+    },
+    "sleep_stage_segments": {
+      "name": "sleep_stage_segments",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "member_id": {
+          "name": "member_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "local_date": {
+          "name": "local_date",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "stage": {
+          "name": "stage",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "duration_seconds": {
+          "name": "duration_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "uq_sleep_stage_segments_position": {
+          "name": "uq_sleep_stage_segments_position",
+          "columns": [
+            "member_id",
+            "local_date",
+            "provider",
+            "position"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "sleep_stage_segments_member_id_members_id_fk": {
+          "name": "sleep_stage_segments_member_id_members_id_fk",
+          "tableFrom": "sleep_stage_segments",
+          "tableTo": "members",
+          "columnsFrom": [
+            "member_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "ck_sleep_stage_segments_provider": {
+          "name": "ck_sleep_stage_segments_provider",
+          "value": "\"sleep_stage_segments\".\"provider\" IN ('oura', 'whoop')"
+        },
+        "ck_sleep_stage_segments_stage": {
+          "name": "ck_sleep_stage_segments_stage",
+          "value": "\"sleep_stage_segments\".\"stage\" IN ('rem', 'light', 'deep', 'awake')"
+        },
+        "ck_sleep_stage_segments_position": {
+          "name": "ck_sleep_stage_segments_position",
+          "value": "\"sleep_stage_segments\".\"position\" >= 0"
+        },
+        "ck_sleep_stage_segments_duration": {
+          "name": "ck_sleep_stage_segments_duration",
+          "value": "\"sleep_stage_segments\".\"duration_seconds\" > 0"
+        }
+      }
+    },
+    "sync_attempts": {
+      "name": "sync_attempts",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "connection_id": {
+          "name": "connection_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "local_date": {
+          "name": "local_date",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "error_code": {
+          "name": "error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "idx_sync_attempts_connection_started": {
+          "name": "idx_sync_attempts_connection_started",
+          "columns": [
+            "connection_id",
+            "started_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "sync_attempts_connection_id_provider_connections_id_fk": {
+          "name": "sync_attempts_connection_id_provider_connections_id_fk",
+          "tableFrom": "sync_attempts",
+          "tableTo": "provider_connections",
+          "columnsFrom": [
+            "connection_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "ck_sync_attempts_status": {
+          "name": "ck_sync_attempts_status",
+          "value": "\"sync_attempts\".\"status\" IN ('started', 'succeeded', 'failed')"
+        },
+        "ck_sync_attempts_window": {
+          "name": "ck_sync_attempts_window",
+          "value": "\"sync_attempts\".\"finished_at\" IS NULL OR \"sync_attempts\".\"finished_at\" >= \"sync_attempts\".\"started_at\""
+        }
+      }
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}

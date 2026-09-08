@@ -7,11 +7,17 @@ Use GitHub's private vulnerability reporting for this repository. If that option
 Never include any of the following in an issue, discussion, pull request, test fixture, screenshot, or log:
 
 - Oura client IDs or client secrets
+- WHOOP client IDs or client secrets
 - access tokens, refresh tokens, authorization codes, or callback URLs containing codes
-- raw Oura API responses or health records
+- raw Oura or WHOOP API responses or health records
 - populated `app.env` or profile `.env` files
 
-Revoke exposed Oura credentials immediately before reporting the incident.
+Revoke exposed Oura or WHOOP credentials immediately before reporting the incident.
+
+The hosted dashboard must keep provider credentials server-side, reject
+unauthenticated requests, enforce the household allowlist on every health-data
+route, and return private, non-cacheable responses. Production refresh tokens
+must be encrypted with a key that is not stored in the same database.
 
 ## Supported versions
 
