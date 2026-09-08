@@ -128,14 +128,15 @@ function buildRangeView(input: {
     const memberRecords = input.stored.records.filter((item) => item.memberId === stored.id);
     const ouraRecords = memberRecords.filter((item) => item.provider === "oura");
     const periodRecords = memberRecords.filter((item) => item.localDate >= periodStart && item.localDate <= input.date);
-    const activeOuraRecords = periodRecords.filter((item) => item.provider === "oura" && item.status === "complete");
-    const activeWhoopRecords = periodRecords.filter((item) => item.provider === "whoop" && item.status === "complete");
+    const sources = input.connections.filter((item) => item.memberId === stored.id && item.status !== "disconnected")
+      .map((item) => item.provider);
+    const activeOuraRecords = sources.includes("oura")
+      ? periodRecords.filter((item) => item.provider === "oura" && item.status === "complete") : [];
+    const activeWhoopRecords = sources.includes("whoop")
+      ? periodRecords.filter((item) => item.provider === "whoop" && item.status === "complete") : [];
     const todayOuraRecord = input.range === "today"
       ? activeOuraRecords.find((item) => item.localDate === input.date) ?? null
       : null;
-    const sources = input.connections.filter((item) => item.memberId === stored.id && item.status !== "disconnected")
-      .map((item) => item.provider);
-
     for (const source of ["oura", "whoop"] as const) {
       const sourceRecords = periodRecords.filter((item) => item.provider === source);
       const providerName = source === "oura" ? "Oura" : "WHOOP";
@@ -153,6 +154,15 @@ function buildRangeView(input: {
     const readiness = average(activeOuraRecords.map((item) => item.readinessScore));
     const overnightHrv = average(activeOuraRecords.map((item) => item.sleepAverageHrvMs));
     const sleepAverageHeartRate = average(activeOuraRecords.map((item) => item.sleepAverageHeartRateBpm));
+    const ouraSleepMinutes = average(activeOuraRecords.map((item) => item.sleepTotalSeconds === null ? null : item.sleepTotalSeconds / 60));
+    const ouraDeepSleepMinutes = average(activeOuraRecords.map((item) => item.deepSleepSeconds === null ? null : item.deepSleepSeconds / 60));
+    const ouraCalories = average(activeOuraRecords.map((item) => item.totalCalories));
+    const ouraRespiratoryRate = average(activeOuraRecords.map((item) => item.respiratoryRate));
+    const todayWhoopRecord = input.range === "today"
+      ? activeWhoopRecords.find((item) => item.localDate === input.date) ?? null
+      : null;
+    const todaySleepRecord = todayOuraRecord?.sleepTotalSeconds !== null && todayOuraRecord?.sleepTotalSeconds !== undefined
+      ? todayOuraRecord : todayWhoopRecord;
     return {
       id: stored.id,
       name: stored.name,
@@ -167,17 +177,17 @@ function buildRangeView(input: {
       sleepAverageHeartRate,
       heartRateBaseline: average(ouraRecords.filter((item) => item.status === "complete").map((item) => item.sleepAverageHeartRateBpm)),
       bodyTemperatureDeviationC: average(activeOuraRecords.map((item) => item.bodyTemperatureDeviationC)),
-      respiratoryRate: average(activeOuraRecords.map((item) => item.respiratoryRate)),
-      sleepMinutes: average(activeOuraRecords.map((item) => item.sleepTotalSeconds === null ? null : item.sleepTotalSeconds / 60)),
-      deepSleepMinutes: average(activeOuraRecords.map((item) => item.deepSleepSeconds === null ? null : item.deepSleepSeconds / 60)),
-      dailyCalories: average(activeOuraRecords.map((item) => item.totalCalories)),
+      respiratoryRate: ouraRespiratoryRate ?? average(activeWhoopRecords.map((item) => item.respiratoryRate)),
+      sleepMinutes: ouraSleepMinutes ?? average(activeWhoopRecords.map((item) => item.sleepTotalSeconds === null ? null : item.sleepTotalSeconds / 60)),
+      deepSleepMinutes: ouraDeepSleepMinutes ?? average(activeWhoopRecords.map((item) => item.deepSleepSeconds === null ? null : item.deepSleepSeconds / 60)),
+      dailyCalories: ouraCalories ?? average(activeWhoopRecords.map((item) => item.totalCalories)),
       strain: average(activeWhoopRecords.map((item) => item.dayStrain)),
-      sleepStart: todayOuraRecord?.sleepStartAt ? new Intl.DateTimeFormat("en", {
+      sleepStart: todaySleepRecord?.sleepStartAt ? new Intl.DateTimeFormat("en", {
         hour: "numeric", minute: "2-digit", timeZone: input.timezone,
-      }).format(new Date(todayOuraRecord.sleepStartAt)).toLowerCase() : "—",
-      sleepEnd: todayOuraRecord?.sleepEndAt ? new Intl.DateTimeFormat("en", {
+      }).format(new Date(todaySleepRecord.sleepStartAt)).toLowerCase() : "—",
+      sleepEnd: todaySleepRecord?.sleepEndAt ? new Intl.DateTimeFormat("en", {
         hour: "numeric", minute: "2-digit", timeZone: input.timezone,
-      }).format(new Date(todayOuraRecord.sleepEndAt)).toLowerCase() : "—",
+      }).format(new Date(todaySleepRecord.sleepEndAt)).toLowerCase() : "—",
       contributors: [
         contributor("HRV balance", average(activeOuraRecords.map((item) => item.hrvBalanceScore))),
         contributor("Resting heart rate", average(activeOuraRecords.map((item) => item.restingHeartRateContributorScore))),

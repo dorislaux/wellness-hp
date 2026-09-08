@@ -95,8 +95,19 @@ async function syncWhoop(connection: Connection, date: string) {
   const records = [];
   for (let cursor = startDate; cursor <= date; cursor = shiftDate(cursor, 1)) {
     const normalized = normalizeWhoopDay({ date: cursor, cycles, recoveries, sleeps });
+    const persisted = normalized.status === "complete" ? {
+      recoveryScore: normalized.recoveryScore,
+      dayStrain: normalized.dayStrain,
+      totalCalories: normalized.totalCalories,
+      sleepTotalSeconds: normalized.sleepTotalSeconds,
+      deepSleepSeconds: normalized.deepSleepSeconds,
+      sleepStartAt: normalized.sleepStartAt,
+      sleepEndAt: normalized.sleepEndAt,
+      respiratoryRate: normalized.respiratoryRate,
+      sourceUpdatedAt: normalized.sourceUpdatedAt,
+    } : {};
     records.push({ memberId: connection.memberId, localDate: cursor, provider: "whoop" as const,
-      status: normalized.status, ...(normalized.status === "complete" ? normalized : {}), fetchedAt: Date.now() });
+      status: normalized.status, ...persisted, fetchedAt: Date.now() });
   }
   await upsertDailyRecords(records);
 }

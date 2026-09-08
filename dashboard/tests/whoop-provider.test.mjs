@@ -60,13 +60,37 @@ test("exchanges and refreshes rotating WHOOP tokens", async () => {
 test("normalizes recovery and strain by the sleep ending on the selected local day", () => {
   const normalized = normalizeWhoopDay({
     date: "2026-08-04",
-    sleeps: [{ id: "sleep-1", cycle_id: 7, nap: false, score_state: "SCORED", end: "2026-08-03T22:30:00Z", timezone_offset: "+08:00", updated_at: "2026-08-03T22:35:00Z" }],
+    sleeps: [{ id: "sleep-1", cycle_id: 7, nap: false, score_state: "SCORED",
+      start: "2026-08-03T14:30:00Z", end: "2026-08-03T22:30:00Z", timezone_offset: "+08:00",
+      updated_at: "2026-08-03T22:35:00Z", score: { respiratory_rate: 15.2, stage_summary: {
+        total_light_sleep_time_milli: 14_400_000, total_slow_wave_sleep_time_milli: 5_400_000,
+        total_rem_sleep_time_milli: 7_200_000,
+      } } }],
     recoveries: [{ sleep_id: "sleep-1", score_state: "SCORED", score: { recovery_score: 82 }, updated_at: "2026-08-03T22:36:00Z" }],
-    cycles: [{ id: 7, score_state: "SCORED", score: { strain: 14.2 }, updated_at: "2026-08-03T22:37:00Z" }],
+    cycles: [{ id: 7, score_state: "SCORED", score: { strain: 14.2, kilojoule: 8_368 }, updated_at: "2026-08-03T22:37:00Z" }],
   });
   assert.equal(normalized.status, "complete");
   assert.equal(normalized.recoveryScore, 82);
   assert.equal(normalized.dayStrain, 14.2);
+  assert.equal(normalized.totalCalories, 2000);
+  assert.equal(normalized.sleepTotalSeconds, 27_000);
+  assert.equal(normalized.deepSleepSeconds, 5_400);
+  assert.equal(normalized.respiratoryRate, 15.2);
+  assert.equal(normalized.sleepStartAt, Date.parse("2026-08-03T14:30:00Z"));
+});
+
+test("keeps scored WHOOP sleep usable when recovery has not arrived", () => {
+  const normalized = normalizeWhoopDay({
+    date: "2026-08-04",
+    sleeps: [{ id: "sleep-1", cycle_id: 7, nap: false, score_state: "SCORED",
+      start: "2026-08-03T14:30:00Z", end: "2026-08-03T22:30:00Z", timezone_offset: "+08:00",
+      score: { stage_summary: { total_light_sleep_time_milli: 14_400_000,
+        total_slow_wave_sleep_time_milli: 5_400_000, total_rem_sleep_time_milli: 7_200_000 } } }],
+    recoveries: [], cycles: [],
+  });
+  assert.equal(normalized.status, "complete");
+  assert.equal(normalized.recoveryScore, null);
+  assert.equal(normalized.sleepTotalSeconds, 27_000);
 });
 
 test("does not substitute an older WHOOP day", () => {

@@ -37,6 +37,10 @@ function requiredString(value: unknown, message: string): string {
   return value;
 }
 
+function finiteNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
 export function validateWhoopConfig(config: WhoopConfig): WhoopConfig {
   if (!config.clientId || !config.clientSecret) throw new Error("WHOOP configuration is incomplete.");
   const redirect = new URL(config.redirectUri);
@@ -236,11 +240,28 @@ export function normalizeWhoopDay(input: {
   );
   const recoveryScore = recovery ? record(recovery.score, "WHOOP recovery score was invalid.") : null;
   const cycleScore = cycle ? record(cycle.score, "WHOOP cycle score was invalid.") : null;
-  if (typeof recoveryScore?.recovery_score !== "number") return { status: "not_current" as const };
+  const sleepScore = sleep.score ? record(sleep.score, "WHOOP sleep score was invalid.") : null;
+  const stageSummary = sleepScore?.stage_summary
+    ? record(sleepScore.stage_summary, "WHOOP sleep stage summary was invalid.")
+    : null;
+  const lightSleepMs = finiteNumber(stageSummary?.total_light_sleep_time_milli);
+  const deepSleepMs = finiteNumber(stageSummary?.total_slow_wave_sleep_time_milli);
+  const remSleepMs = finiteNumber(stageSummary?.total_rem_sleep_time_milli);
+  const stageValues = [lightSleepMs, deepSleepMs, remSleepMs];
+  const sleepTotalSeconds = stageValues.every((value) => value !== null)
+    ? stageValues.reduce<number>((sum, value) => sum + (value ?? 0), 0) / 1000
+    : null;
+  const kilojoule = finiteNumber(cycleScore?.kilojoule);
   return {
     status: "complete" as const,
-    recoveryScore: recoveryScore.recovery_score,
-    dayStrain: typeof cycleScore?.strain === "number" ? cycleScore.strain : null,
+    recoveryScore: finiteNumber(recoveryScore?.recovery_score),
+    dayStrain: finiteNumber(cycleScore?.strain),
+    totalCalories: kilojoule === null ? null : Math.round(kilojoule / 4.184),
+    sleepTotalSeconds,
+    deepSleepSeconds: deepSleepMs === null ? null : deepSleepMs / 1000,
+    sleepStartAt: typeof sleep.start === "string" ? Date.parse(sleep.start) : null,
+    sleepEndAt: typeof sleep.end === "string" ? Date.parse(sleep.end) : null,
+    respiratoryRate: finiteNumber(sleepScore?.respiratory_rate),
     sourceUpdatedAt: Math.max(
       Date.parse(String(sleep.updated_at ?? "")) || 0,
       Date.parse(String(recovery?.updated_at ?? "")) || 0,

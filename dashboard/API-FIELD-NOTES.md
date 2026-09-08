@@ -18,6 +18,8 @@ The frontend currently uses typed fictional data in `app/mock-data.ts`.
 - Cycle strain
 - Recovery HRV and resting heart rate
 - Sleep stage durations and sleep performance metrics
+- Total sleep duration, respiratory rate, and cycle energy expenditure; WHOOP
+  energy is converted from kilojoules to dietary Calories for display
 
 ## Derived by this application
 
@@ -35,6 +37,8 @@ The frontend currently uses typed fictional data in `app/mock-data.ts`.
 - The Oura contributor status words `low`, `fair`, and `good`
 - The user's 30-day readiness, HRV, or heart-rate baseline as a ready-made field
 - A single cross-provider freshness or synchronization status
+- A minute-by-minute WHOOP sleep-stage sequence; WHOOP exposes stage totals,
+  so the dashboard does not fabricate an alternating stage timeline
 - Absolute body temperature; the dashboard therefore labels Oura's value as a
   deviation from the member's baseline
 

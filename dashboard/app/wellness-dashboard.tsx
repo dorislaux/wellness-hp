@@ -509,7 +509,9 @@ function DayDetail({ member, dateLabel, issues, isToday, onBack }: { member: Mem
             {(["REM", "Light", "Deep", "Awake"] as const).map((stage) => <div key={stage}><i className={stage.toLowerCase()} />
               <span>{stage} · {stageDuration(stageTotals[stage])}</span></div>)}
           </div>
-        </> : <p className="period-note">Detailed sleep stages are not available for today yet.</p>
+        </> : <p className="period-note">{member.sources.includes("whoop") && !member.sources.includes("oura")
+          ? "WHOOP provides sleep duration and stage totals, but not the detailed stage sequence required for this timeline."
+          : "Detailed sleep stages are not available for today yet."}</p>
           : <p className="period-note">Daily sleep stages are available from the Today view and are not combined into a range average.</p>}
       </section>
 
