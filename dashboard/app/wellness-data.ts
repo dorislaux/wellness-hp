@@ -11,7 +11,7 @@ export type DataIssue = {
   message: string;
 };
 
-export type RangeKey = "last7" | "last14" | "last30";
+export type RangeKey = "today" | "last7" | "last14" | "last30";
 
 export type RangeView = {
   title: string;
@@ -33,6 +33,7 @@ export type WellnessSnapshot = {
 
 const MOCK_DATE = "2026-08-10";
 export const RANGE_OPTIONS: WellnessSnapshot["rangeOptions"] = [
+  { value: "today", label: "Today" },
   { value: "last7", label: "Last 7 days" },
   { value: "last14", label: "Last 14 days" },
   { value: "last30", label: "Last 30 days" },
@@ -45,10 +46,13 @@ function shiftDate(date: string, days: number): string {
 }
 
 function daysForRange(range: RangeKey): number {
-  return range === "last7" ? 7 : range === "last14" ? 14 : 30;
+  return range === "today" ? 1 : range === "last7" ? 7 : range === "last14" ? 14 : 30;
 }
 
 function periodLabel(currentDate: string, days: number): string {
+  if (days === 1) return new Intl.DateTimeFormat("en", {
+    weekday: "long", month: "long", day: "numeric", timeZone: "UTC",
+  }).format(new Date(`${currentDate}T12:00:00.000Z`));
   const startDate = shiftDate(currentDate, 1 - days);
   const format = (value: string) => new Intl.DateTimeFormat("en", {
     month: "long", day: "numeric", timeZone: "UTC",
@@ -79,11 +83,13 @@ function mockMembersForDays(days: number): Member[] {
 function mockView(range: RangeKey): RangeView {
   const days = daysForRange(range);
   return {
-    title: `${days}-day average`,
+    title: range === "today" ? "Today" : `${days}-day average`,
     dateLabel: periodLabel(MOCK_DATE, days),
     historyDates: Array.from({ length: days }, (_, index) => shiftDate(MOCK_DATE, index + 1 - days)),
     emptyMessage: null,
-    members: mockMembersForDays(days),
+    members: range === "today"
+      ? mockMembers.map((member) => ({ ...member, readinessHistory: [member.readiness] }))
+      : mockMembersForDays(days),
     issues: [{ memberId: "jordan", source: "whoop", code: "not_connected", message: "WHOOP is not paired for Jordan." }],
   };
 }
@@ -95,7 +101,7 @@ function mockSnapshot(): WellnessSnapshot {
     canManageHousehold: true,
     connectionMemberIds: mockMembers.map((member) => member.id),
     rangeOptions: RANGE_OPTIONS,
-    ranges: { last7: mockView("last7"), last14: mockView("last14"), last30: mockView("last30") },
+    ranges: { today: mockView("today"), last7: mockView("last7"), last14: mockView("last14"), last30: mockView("last30") },
   };
 }
 
@@ -112,6 +118,7 @@ function buildRangeView(input: {
   date: string;
   stored: StoredData;
   connections: Connections;
+  timezone: string;
 }): RangeView {
   const days = daysForRange(input.range);
   const periodStart = shiftDate(input.date, 1 - days);
@@ -123,6 +130,9 @@ function buildRangeView(input: {
     const periodRecords = memberRecords.filter((item) => item.localDate >= periodStart && item.localDate <= input.date);
     const activeOuraRecords = periodRecords.filter((item) => item.provider === "oura" && item.status === "complete");
     const activeWhoopRecords = periodRecords.filter((item) => item.provider === "whoop" && item.status === "complete");
+    const todayOuraRecord = input.range === "today"
+      ? activeOuraRecords.find((item) => item.localDate === input.date) ?? null
+      : null;
     const sources = input.connections.filter((item) => item.memberId === stored.id && item.status !== "disconnected")
       .map((item) => item.provider);
 
@@ -134,7 +144,9 @@ function buildRangeView(input: {
       } else if (!sourceRecords.some((item) => item.status === "complete") && sourceRecords.some((item) => item.status === "unavailable")) {
         issues.push({ memberId: stored.id, source, code: "unavailable", message: `${providerName} is temporarily unavailable for ${stored.name}.` });
       } else if (!sourceRecords.some((item) => item.status === "complete")) {
-        issues.push({ memberId: stored.id, source, code: "not_current", message: `${providerName} has no complete data in this ${days}-day period for ${stored.name}.` });
+        issues.push({ memberId: stored.id, source, code: "not_current", message: input.range === "today"
+          ? `${providerName} has no complete data for today for ${stored.name}.`
+          : `${providerName} has no complete data in this ${days}-day period for ${stored.name}.` });
       }
     }
 
@@ -154,12 +166,18 @@ function buildRangeView(input: {
       hrvBaseline: average(ouraRecords.filter((item) => item.status === "complete").map((item) => item.sleepAverageHrvMs)),
       sleepAverageHeartRate,
       heartRateBaseline: average(ouraRecords.filter((item) => item.status === "complete").map((item) => item.sleepAverageHeartRateBpm)),
+      bodyTemperatureDeviationC: average(activeOuraRecords.map((item) => item.bodyTemperatureDeviationC)),
+      respiratoryRate: average(activeOuraRecords.map((item) => item.respiratoryRate)),
       sleepMinutes: average(activeOuraRecords.map((item) => item.sleepTotalSeconds === null ? null : item.sleepTotalSeconds / 60)),
       deepSleepMinutes: average(activeOuraRecords.map((item) => item.deepSleepSeconds === null ? null : item.deepSleepSeconds / 60)),
       dailyCalories: average(activeOuraRecords.map((item) => item.totalCalories)),
       strain: average(activeWhoopRecords.map((item) => item.dayStrain)),
-      sleepStart: "—",
-      sleepEnd: "—",
+      sleepStart: todayOuraRecord?.sleepStartAt ? new Intl.DateTimeFormat("en", {
+        hour: "numeric", minute: "2-digit", timeZone: input.timezone,
+      }).format(new Date(todayOuraRecord.sleepStartAt)).toLowerCase() : "—",
+      sleepEnd: todayOuraRecord?.sleepEndAt ? new Intl.DateTimeFormat("en", {
+        hour: "numeric", minute: "2-digit", timeZone: input.timezone,
+      }).format(new Date(todayOuraRecord.sleepEndAt)).toLowerCase() : "—",
       contributors: [
         contributor("HRV balance", average(activeOuraRecords.map((item) => item.hrvBalanceScore))),
         contributor("Resting heart rate", average(activeOuraRecords.map((item) => item.restingHeartRateContributorScore))),
@@ -167,7 +185,11 @@ function buildRangeView(input: {
         contributor("Body temperature", average(activeOuraRecords.map((item) => item.bodyTemperatureContributorScore))),
         contributor("Previous day activity", average(activeOuraRecords.map((item) => item.previousDayActivityScore))),
       ],
-      stages: [],
+      stages: input.range === "today" ? input.stored.stages
+        .filter((stage) => stage.memberId === stored.id && stage.localDate === input.date)
+        .map((stage) => ({ stage: stage.stage === "rem" ? "REM" as const
+          : `${stage.stage[0].toUpperCase()}${stage.stage.slice(1)}` as "Light" | "Deep" | "Awake",
+        minutes: stage.durationSeconds / 60 })) : [],
       readinessHistory: historyDates.map((day) =>
         ouraRecords.find((item) => item.localDate === day && item.status === "complete")?.readinessScore ?? null),
     };
@@ -176,11 +198,13 @@ function buildRangeView(input: {
   const empty = liveMembers.every((member) => member.readiness === null && member.recovery === null &&
     member.overnightHrv === null && member.sleepMinutes === null && member.dailyCalories === null && member.strain === null);
   return {
-    title: `${days}-day average`,
+    title: input.range === "today" ? "Today" : `${days}-day average`,
     dateLabel: periodLabel(input.date, days),
     historyDates,
     emptyMessage: empty
-      ? `No complete data is available for the last ${days} days. Your connected devices will refresh automatically.`
+      ? input.range === "today"
+        ? "Today's data is not ready yet. Your connected devices will refresh automatically."
+        : `No complete data is available for the last ${days} days. Your connected devices will refresh automatically.`
       : null,
     members: liveMembers,
     issues,
@@ -205,9 +229,10 @@ async function sitesSnapshot(user: ChatGPTUser, refresh: boolean): Promise<Welln
     connectionMemberIds,
     rangeOptions: RANGE_OPTIONS,
     ranges: {
-      last7: buildRangeView({ range: "last7", date, stored, connections }),
-      last14: buildRangeView({ range: "last14", date, stored, connections }),
-      last30: buildRangeView({ range: "last30", date, stored, connections }),
+      today: buildRangeView({ range: "today", date, stored, connections, timezone: household.timezone }),
+      last7: buildRangeView({ range: "last7", date, stored, connections, timezone: household.timezone }),
+      last14: buildRangeView({ range: "last14", date, stored, connections, timezone: household.timezone }),
+      last30: buildRangeView({ range: "last30", date, stored, connections, timezone: household.timezone }),
     },
   };
 }

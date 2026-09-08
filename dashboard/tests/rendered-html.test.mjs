@@ -36,7 +36,7 @@ test("redirects an anonymous visitor to ChatGPT sign-in", async () => {
 test("lets any authenticated local mock visitor use the fictional dashboard", async () => {
   const response = await render("/", authenticatedHeaders("stranger@example.test"));
   assert.equal(response.status, 200);
-  assert.match(await response.text(), /7-day average/);
+  assert.match(await response.text(), /Today/);
 });
 
 test("server-renders the dashboard for an authenticated mock user", async () => {
@@ -44,7 +44,8 @@ test("server-renders the dashboard for an authenticated mock user", async () => 
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.match(html, /<title>Household wellness<\/title>/i);
-  assert.match(html, /7-day average/);
+  assert.match(html, /Today/);
+  assert.match(html, /Monday, August 10/);
   assert.match(html, /Last 7 days/);
   assert.match(html, /Last 14 days/);
   assert.match(html, /Last 30 days/);
@@ -56,13 +57,12 @@ test("server-renders the dashboard for an authenticated mock user", async () => 
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton/i);
 });
 
-test("ignores obsolete specific-date links and renders the default range", async () => {
+test("ignores obsolete specific-date links and renders Today in household local time", async () => {
   const response = await render("/?date=2026-08-10", authenticatedHeaders(ALLOWED_EMAIL));
   assert.equal(response.status, 200);
   const html = await response.text();
-  assert.match(html, /7-day average/);
-  assert.match(html, /August 4 – August 10/);
-  assert.doesNotMatch(html, /Today/);
+  assert.match(html, /Today/);
+  assert.match(html, /Monday, August 10/);
 });
 
 test("protects the session API with ChatGPT authentication", async () => {
@@ -110,7 +110,9 @@ test("protects wellness data and disables caching", async () => {
   const snapshot = await allowed.json();
   assert.equal(snapshot.mode, "mock");
   assert.equal(snapshot.date, "2026-08-10");
-  assert.deepEqual(snapshot.rangeOptions.map((option) => option.value), ["last7", "last14", "last30"]);
+  assert.deepEqual(snapshot.rangeOptions.map((option) => option.value), ["today", "last7", "last14", "last30"]);
+  assert.equal(snapshot.ranges.today.title, "Today");
+  assert.equal(snapshot.ranges.today.historyDates.length, 1);
   assert.equal(snapshot.ranges.last7.title, "7-day average");
   assert.equal(snapshot.ranges.last7.historyDates.length, 7);
   assert.equal(snapshot.ranges.last14.historyDates.length, 14);

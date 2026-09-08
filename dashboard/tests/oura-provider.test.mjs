@@ -48,16 +48,18 @@ test("requests Oura daily activity with an inclusive dashboard end date", async 
 test("normalizes only an exact Oura date and selects the main sleep", () => {
   const value = normalizeOuraDay({ date: "2026-09-04",
     activities: [{ day: "2026-09-04", total_calories: 2340 }],
-    readiness: [{ day: "2026-09-04", score: 81, contributors: { hrv_balance: 80,
+    readiness: [{ day: "2026-09-04", score: 81, temperature_deviation: 0.2, contributors: { hrv_balance: 80,
       resting_heart_rate: 75, sleep_balance: 65, body_temperature: 90, previous_day_activity: 70 } }],
     sleeps: [{ day: "2026-09-04", type: "rest", total_sleep_duration: 800 },
       { day: "2026-09-04", type: "long_sleep", total_sleep_duration: 24000, deep_sleep_duration: 5000,
-        average_heart_rate: 52, average_hrv: 44, bedtime_start: "2026-09-03T23:00:00+08:00",
+        average_heart_rate: 52, average_hrv: 44, average_breath: 15.2, bedtime_start: "2026-09-03T23:00:00+08:00",
         bedtime_end: "2026-09-04T06:00:00+08:00", timestamp: "2026-09-04T06:10:00+08:00",
         sleep_phase_5_min: "1234" }] });
   assert.equal(value.status, "complete");
   assert.equal(value.readinessScore, 81);
   assert.equal(value.sleepAverageHrvMs, 44);
+  assert.equal(value.bodyTemperatureDeviationC, 0.2);
+  assert.equal(value.respiratoryRate, 15.2);
   assert.equal(value.totalCalories, 2340);
   assert.equal(value.sleepStages.length, 4);
   assert.deepEqual(normalizeOuraDay({ date: "2026-09-05", readiness: [], sleeps: [] }), { status: "not_current" });

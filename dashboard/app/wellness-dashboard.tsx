@@ -306,17 +306,29 @@ function SegmentedControl({ view, onChange }: { view: View; onChange: (view: Vie
   );
 }
 
+function RangeControl({ range, options, onChange }: {
+  range: RangeKey;
+  options: WellnessSnapshot["rangeOptions"];
+  onChange: (range: RangeKey) => void;
+}) {
+  const compactLabels: Record<RangeKey, string> = { today: "Today", last7: "7D", last14: "14D", last30: "30D" };
+  return <div className="range-control" aria-label="Dashboard date range">
+    {options.map((option) => <button key={option.value} className={range === option.value ? "active" : ""}
+      aria-pressed={range === option.value} onClick={() => onChange(option.value)}>{compactLabels[option.value]}</button>)}
+  </div>;
+}
+
 function ProviderLabel({ member }: { member: Member }) {
   const hasOura = member.sources.includes("oura");
   const hasWhoop = member.sources.includes("whoop");
   return <span>{hasOura && hasWhoop ? "Oura + Whoop" : hasOura ? "Oura only" : hasWhoop ? "Whoop only" : "No devices connected"}</span>;
 }
 
-function HouseholdCard({ member, issues, onOpen }: { member: Member; issues: DataIssue[]; onOpen: () => void }) {
+function HouseholdCard({ member, issues, isToday, onOpen }: { member: Member; issues: DataIssue[]; isToday: boolean; onOpen: () => void }) {
   const ouraIssue = issues.find((issue) => issue.memberId === member.id && issue.source === "oura" && issue.code !== "not_connected");
   return (
     <article className="household-card">
-      <button className="card-open" onClick={onOpen} aria-label={`View ${member.name}'s range summary`}>
+      <button className="card-open" onClick={onOpen} aria-label={`View ${member.name}'s ${isToday ? "day details" : "range summary"}`}>
         <span aria-hidden="true">→</span>
       </button>
       <div className="member-heading">
@@ -341,16 +353,16 @@ function HouseholdCard({ member, issues, onOpen }: { member: Member; issues: Dat
         </>}
       </div>
       {ouraIssue && <p className="muted">{ouraIssue.message}</p>}
-      <button className="detail-link" onClick={onOpen}>View range summary <span aria-hidden="true">→</span></button>
+      <button className="detail-link" onClick={onOpen}>View {isToday ? "day details" : "range summary"} <span aria-hidden="true">→</span></button>
     </article>
   );
 }
 
-function CardsView({ visibleMembers, issues, onOpen }: { visibleMembers: Member[]; issues: DataIssue[]; onOpen: (member: Member) => void }) {
+function CardsView({ visibleMembers, issues, isToday, onOpen }: { visibleMembers: Member[]; issues: DataIssue[]; isToday: boolean; onOpen: (member: Member) => void }) {
   return (
-    <section className="cards-grid" aria-label="Household range summaries">
+    <section className="cards-grid" aria-label={isToday ? "Household daily summaries" : "Household range summaries"}>
       {visibleMembers.map((member) => (
-        <HouseholdCard key={member.id} member={member} issues={issues} onOpen={() => onOpen(member)} />
+        <HouseholdCard key={member.id} member={member} issues={issues} isToday={isToday} onOpen={() => onOpen(member)} />
       ))}
     </section>
   );
@@ -435,9 +447,26 @@ function Delta({ value, unit, inverse = false }: { value: number | null; unit: s
   return <p className={favorable ? "positive" : "negative"}>{formatMetric(Math.abs(value))}{unit} {value >= 0 ? "above" : "below"} baseline</p>;
 }
 
-function DayDetail({ member, dateLabel, issues, onBack }: { member: Member; dateLabel: string; issues: DataIssue[]; onBack: () => void }) {
+function stageDuration(minutes: number): string {
+  const rounded = Math.round(minutes);
+  const hours = Math.floor(rounded / 60);
+  const remainder = rounded % 60;
+  return hours ? `${hours}h${remainder ? ` ${remainder}m` : ""}` : `${remainder}m`;
+}
+
+function signedTemperature(value: number | null): string {
+  if (value === null) return "—";
+  return `${value >= 0 ? "+" : ""}${formatMetric(value)} °C`;
+}
+
+function DayDetail({ member, dateLabel, issues, isToday, onBack }: { member: Member; dateLabel: string; issues: DataIssue[]; isToday: boolean; onBack: () => void }) {
   const readinessDelta = member.readiness === null || member.readinessAverage === null
     ? null : member.readiness - member.readinessAverage;
+  const stageTotals = member.stages.reduce<Record<"REM" | "Light" | "Deep" | "Awake", number>>(
+    (totals, stage) => ({ ...totals, [stage.stage]: totals[stage.stage] + stage.minutes }),
+    { REM: 0, Light: 0, Deep: 0, Awake: 0 },
+  );
+  const stageTotal = member.stages.reduce((sum, stage) => sum + stage.minutes, 0);
   return (
     <main className="detail-page">
       <header className="detail-header">
@@ -448,7 +477,7 @@ function DayDetail({ member, dateLabel, issues, onBack }: { member: Member; date
       <section className="panel readiness-panel">
         <div className={`score-ring ${readinessTone(member.readiness)}`}>{formatMetric(member.readiness)}</div>
         <div className="readiness-copy">
-          <h2>Average readiness{readinessDelta === null ? "" : ` · ${readinessDelta >= 0 ? "above usual" : "below usual"}`}</h2>
+          <h2>{isToday ? "Readiness" : "Average readiness"}{readinessDelta === null ? "" : ` · ${readinessDelta >= 0 ? "above usual" : "below usual"}`}</h2>
           <p>{readinessDelta === null ? "Readiness or baseline is unavailable." : `${readinessDelta >= 0 ? "Higher" : "Lower"} than ${member.name}'s 30-day average of ${formatMetric(member.readinessAverage)}`}</p>
         </div>
         <div className="contributors">
@@ -469,13 +498,32 @@ function DayDetail({ member, dateLabel, issues, onBack }: { member: Member; date
       ))}
 
       <section className="panel sleep-panel">
-        <div className="sleep-heading"><h2>Average sleep</h2><p>{formatDuration(member.sleepMinutes)} per night</p></div>
-        <p className="period-note">Daily sleep stages are not combined into the range average.</p>
+        <div className="sleep-heading"><h2>{isToday ? "Sleep" : "Average sleep"}</h2><p>{formatDuration(member.sleepMinutes)}{isToday && member.sleepStart !== "—" && member.sleepEnd !== "—" ? ` · ${member.sleepStart} – ${member.sleepEnd}` : " per night"}</p></div>
+        {isToday ? member.stages.length > 0 ? <>
+          <div className="hypnogram" role="img" aria-label={`Sleep stages from ${member.sleepStart} to ${member.sleepEnd}`}>
+            {member.stages.map((stage, index) => <span key={`${stage.stage}-${index}`} className={stage.stage.toLowerCase()}
+              style={{ flexGrow: stage.minutes, flexBasis: `${stageTotal ? stage.minutes / stageTotal * 100 : 0}%` }} />)}
+          </div>
+          <div className="time-labels"><span>{member.sleepStart}</span><span>{member.sleepEnd}</span></div>
+          <div className="stage-legend">
+            {(["REM", "Light", "Deep", "Awake"] as const).map((stage) => <div key={stage}><i className={stage.toLowerCase()} />
+              <span>{stage} · {stageDuration(stageTotals[stage])}</span></div>)}
+          </div>
+        </> : <p className="period-note">Detailed sleep stages are not available for today yet.</p>
+          : <p className="period-note">Daily sleep stages are available from the Today view and are not combined into a range average.</p>}
       </section>
 
       <section className="stat-pair">
-        <article className="panel stat-card"><span>Average overnight HRV</span><strong>{member.overnightHrv === null ? "—" : `${formatMetric(member.overnightHrv)} ms`}</strong><Delta value={member.overnightHrv === null || member.hrvBaseline === null ? null : member.overnightHrv - member.hrvBaseline} unit="ms" /></article>
-        <article className="panel stat-card"><span>Average sleep heart rate</span><strong>{member.sleepAverageHeartRate === null ? "—" : `${formatMetric(member.sleepAverageHeartRate)} bpm`}</strong><Delta value={member.sleepAverageHeartRate === null || member.heartRateBaseline === null ? null : member.sleepAverageHeartRate - member.heartRateBaseline} unit="bpm" inverse /></article>
+        <article className="panel stat-card"><span>{isToday ? "Overnight HRV" : "Average overnight HRV"}</span><strong>{member.overnightHrv === null ? "—" : `${formatMetric(member.overnightHrv)} ms`}</strong><Delta value={member.overnightHrv === null || member.hrvBaseline === null ? null : member.overnightHrv - member.hrvBaseline} unit="ms" /></article>
+        <article className="panel stat-card"><span>{isToday ? "Resting heart rate" : "Average sleep heart rate"}</span><strong>{member.sleepAverageHeartRate === null ? "—" : `${formatMetric(member.sleepAverageHeartRate)} bpm`}</strong><Delta value={member.sleepAverageHeartRate === null || member.heartRateBaseline === null ? null : member.sleepAverageHeartRate - member.heartRateBaseline} unit="bpm" inverse /></article>
+      </section>
+
+      <section className="stat-pair secondary-stat-pair">
+        <article className="panel stat-card"><span>{isToday ? "Body temperature" : "Average body temperature"}</span>
+          <strong>{signedTemperature(member.bodyTemperatureDeviationC)}</strong><p className="muted">{member.bodyTemperatureDeviationC === null ? "Unavailable" : "from baseline"}</p></article>
+        <article className="panel stat-card"><span>{isToday ? "Respiratory rate" : "Average respiratory rate"}</span>
+          <strong>{member.respiratoryRate === null ? "—" : formatMetric(member.respiratoryRate)}{member.respiratoryRate !== null && <small> breaths/min</small>}</strong>
+          {member.respiratoryRate === null && <p className="muted">Unavailable</p>}</article>
       </section>
 
       {member.sources.includes("whoop") && member.recovery !== null ? (
@@ -494,7 +542,7 @@ function applyTheme(theme: ThemePreference) {
 
 export function WellnessDashboard({ initialSnapshot }: { initialSnapshot: WellnessSnapshot }) {
   const [snapshot, setSnapshot] = useState(initialSnapshot);
-  const [range, setRange] = useState<RangeKey>("last7");
+  const [range, setRange] = useState<RangeKey>("today");
   const [view, setView] = useState<View>("cards");
   const [filter, setFilter] = useState("family");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -543,10 +591,11 @@ export function WellnessDashboard({ initialSnapshot }: { initialSnapshot: Wellne
       last7: { ...existing.ranges.last7, members: existing.ranges.last7.members.map((member) => member.id === updated.id ? { ...member, ...updated } : member) },
       last14: { ...existing.ranges.last14, members: existing.ranges.last14.members.map((member) => member.id === updated.id ? { ...member, ...updated } : member) },
       last30: { ...existing.ranges.last30, members: existing.ranges.last30.members.map((member) => member.id === updated.id ? { ...member, ...updated } : member) },
+      today: { ...existing.ranges.today, members: existing.ranges.today.members.map((member) => member.id === updated.id ? { ...member, ...updated } : member) },
     } }));
   }
 
-  if (selected) return <DayDetail member={selected} dateLabel={current.dateLabel} issues={current.issues} onBack={() => setSelectedId(null)} />;
+  if (selected) return <DayDetail member={selected} dateLabel={current.dateLabel} issues={current.issues} isToday={range === "today"} onBack={() => setSelectedId(null)} />;
 
   return (
     <main className="dashboard-shell">
@@ -556,14 +605,16 @@ export function WellnessDashboard({ initialSnapshot }: { initialSnapshot: Wellne
           {snapshot.mode === "sites" && <span className={`sync-status ${syncing ? "syncing" : ""} ${syncFailed ? "failed" : ""}`}
             role="status" aria-label={syncing ? "Data is syncing" : syncFailed ? "Data sync did not complete" : "Data is up to date"}
             title={syncing ? "Syncing data" : syncFailed ? "Sync needs attention" : "Data is up to date"}>↻</span>}
-          <button className="manage-connections" onClick={() => setSettingsOpen(true)}>Settings</button>
-          <label className="date-filter">Range<select value={range} onChange={(event) => setRange(event.target.value as RangeKey)}>{snapshot.rangeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-          <label className="member-filter">View<select value={filter} onChange={(event) => setFilter(event.target.value)}><option value="family">Family</option>{members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
+          <button className="manage-connections" onClick={() => setSettingsOpen(true)} aria-label="Settings"><span className="settings-icon" aria-hidden="true">⚙</span><span className="settings-label">Settings</span></button>
         </div>
       </header>
+      <div className="dashboard-controls">
+        <label className="member-filter">View<select value={filter} onChange={(event) => setFilter(event.target.value)}><option value="family">Family</option>{members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
+        <RangeControl range={range} options={snapshot.rangeOptions} onChange={setRange} />
+      </div>
       <SegmentedControl view={view} onChange={setView} />
       {current.emptyMessage && <section className="empty-state" role="status"><h2>Data not ready</h2><p>{current.emptyMessage}</p></section>}
-      {view === "cards" ? <CardsView visibleMembers={visibleMembers} issues={current.issues} onOpen={(member) => setSelectedId(member.id)} />
+      {view === "cards" ? <CardsView visibleMembers={visibleMembers} issues={current.issues} isToday={range === "today"} onOpen={(member) => setSelectedId(member.id)} />
         : <TimelineView visibleMembers={visibleMembers} historyDates={current.historyDates} />}
       {settingsOpen && <SettingsPanel members={members} canManageHousehold={snapshot.canManageHousehold}
         connectionMemberIds={snapshot.connectionMemberIds} theme={theme}

@@ -8,6 +8,8 @@ The frontend currently uses typed fictional data in `app/mock-data.ts`.
 - Detailed sleep-stage sequence (`sleep_phase_5_min`)
 - Sleep start/end timestamps
 - Average sleep heart rate and average HRV
+- Average respiratory rate during sleep (`average_breath`)
+- Body-temperature deviation from the member's baseline (`temperature_deviation`)
 - Deep, light, REM, awake, and total-sleep durations
 
 ## Available from WHOOP API
@@ -33,6 +35,8 @@ The frontend currently uses typed fictional data in `app/mock-data.ts`.
 - The Oura contributor status words `low`, `fair`, and `good`
 - The user's 30-day readiness, HRV, or heart-rate baseline as a ready-made field
 - A single cross-provider freshness or synchronization status
+- Absolute body temperature; the dashboard therefore labels Oura's value as a
+  deviation from the member's baseline
 
 Do not describe derived labels or baselines as values supplied directly by Oura
 or WHOOP.

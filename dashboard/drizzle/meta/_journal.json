@@ -43,6 +43,13 @@
       "when": 1788833868761,
       "tag": "0005_goofy_the_santerians",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1788860803631,
+      "tag": "0006_fluffy_rocket_raccoon",
+      "breakpoints": true
     }
   ]
 }

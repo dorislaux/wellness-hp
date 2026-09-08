@@ -25,6 +25,8 @@ export type Member = {
   hrvBaseline: number | null;
   sleepAverageHeartRate: number | null;
   heartRateBaseline: number | null;
+  bodyTemperatureDeviationC: number | null;
+  respiratoryRate: number | null;
   sleepMinutes: number | null;
   deepSleepMinutes: number | null;
   dailyCalories: number | null;
@@ -78,6 +80,8 @@ export const members: Member[] = [
     hrvBaseline: 58,
     sleepAverageHeartRate: 52,
     heartRateBaseline: 54,
+    bodyTemperatureDeviationC: 0.2,
+    respiratoryRate: 15.2,
     sleepMinutes: 462,
     deepSleepMinutes: 96,
     dailyCalories: 2340,
@@ -101,6 +105,8 @@ export const members: Member[] = [
     hrvBaseline: 56,
     sleepAverageHeartRate: 61,
     heartRateBaseline: 57,
+    bodyTemperatureDeviationC: 0.4,
+    respiratoryRate: 16.1,
     sleepMinutes: 350,
     deepSleepMinutes: 85,
     dailyCalories: 2015,
@@ -124,6 +130,8 @@ export const members: Member[] = [
     hrvBaseline: 52,
     sleepAverageHeartRate: 56,
     heartRateBaseline: 55,
+    bodyTemperatureDeviationC: -0.1,
+    respiratoryRate: 14.8,
     sleepMinutes: 415,
     deepSleepMinutes: 88,
     dailyCalories: 2248,

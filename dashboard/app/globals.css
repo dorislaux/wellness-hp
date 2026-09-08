@@ -78,11 +78,15 @@ button { color: inherit; }
 .dashboard-header h1, .detail-header h1 { margin: 0; font-size: 34px; line-height: 1.05; letter-spacing: -.035em; }
 .dashboard-header p, .detail-header p { margin: 10px 0 0; color: var(--muted); font-size: 20px; font-weight: 600; }
 
-.member-filter, .date-filter { display: flex; align-items: center; gap: 10px; color: var(--muted); font-weight: 650; }
-.member-filter select, .date-filter select { min-width: 150px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); padding: 11px 38px 11px 14px; color: var(--ink); }
-.date-filter select { min-width: 172px; }
+.member-filter { display: flex; align-items: center; gap: 10px; color: var(--muted); font-weight: 650; }
+.member-filter select { min-width: 150px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); padding: 11px 38px 11px 14px; color: var(--ink); }
 .header-actions { display: flex; align-items: center; gap: 14px; }
+.dashboard-controls { display: flex; align-items: center; justify-content: flex-end; gap: 24px; margin-bottom: 20px; }
+.range-control { display: grid; grid-template-columns: repeat(4, 1fr); width: 410px; padding: 3px; border: 1px solid var(--line); border-radius: 17px; background: var(--subtle); }
+.range-control button { min-height: 44px; border: 0; border-radius: 13px; background: transparent; color: var(--quiet); font-weight: 700; cursor: pointer; }
+.range-control button.active { background: var(--surface); color: var(--ink); box-shadow: 0 1px 5px #24282112; }
 .manage-connections, .provider-link, .connection-member button, .quiet-button, .save-member { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); padding: 11px 15px; font-weight: 700; cursor: pointer; text-decoration: none; }
+.settings-icon { display: none; }
 .manage-connections:hover, .provider-link:hover, .connection-member button:hover { border-color: var(--ink); }
 .modal-backdrop { position: fixed; z-index: 20; inset: 0; display: grid; place-items: center; padding: 20px; background: #11131166; }
 .connection-panel { position: relative; width: min(680px, 100%); max-height: calc(100vh - 40px); overflow-y: auto; border-radius: 24px; background: var(--surface); padding: 34px; box-shadow: 0 22px 70px var(--shadow); }
@@ -271,6 +275,7 @@ button { color: inherit; }
 .stat-card { display: grid; gap: 9px; min-height: 188px; }
 .stat-card > span { color: var(--muted); font-size: 20px; }
 .stat-card strong { font-size: 43px; line-height: 1.1; }
+.stat-card strong small { color: var(--muted); font-size: .48em; font-weight: 650; }
 .stat-card p { margin: 2px 0 0; font-size: 18px; }
 .positive { color: #08740f; } .negative { color: #a32525; }
 .whoop-row { display: flex; gap: 80px; margin-top: 24px; }
@@ -330,15 +335,19 @@ button { color: inherit; }
   .onboarding-card { padding: 28px 24px; }
   .pending-actions .primary-action, .pending-actions a { font-size: clamp(14px, 4vw, 16px); }
   .dashboard-shell, .detail-page { padding: 18px 14px 32px; }
-  .dashboard-header { align-items: start; }
-  .header-actions { align-items: end; flex-direction: column-reverse; }
-  .manage-connections { padding: 9px 12px; font-size: 14px; }
+  .dashboard-header { align-items: start; margin-bottom: 16px; }
+  .header-actions { align-items: center; flex-direction: row; gap: 9px; }
+  .manage-connections { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; padding: 0; }
+  .settings-icon { display: inline; font-size: 19px; line-height: 1; }
+  .settings-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
   .dashboard-header h1, .detail-header h1 { font-size: 28px; }
-  .dashboard-header p { max-width: 100px; margin-top: 8px; font-size: 17px; line-height: 1.15; }
-  .member-filter, .date-filter { font-size: 0; }
-  .member-filter select, .date-filter select { min-width: 115px; padding: 10px 32px 10px 12px; font-size: 16px; }
-  .date-filter select { min-width: 150px; }
-  .segmented { width: 100%; margin: 8px 0 30px; }
+  .dashboard-header p { margin-top: 8px; font-size: 16px; line-height: 1.2; }
+  .dashboard-controls { display: grid; grid-template-columns: minmax(112px, .8fr) minmax(210px, 1.7fr); gap: 10px; margin-bottom: 14px; }
+  .member-filter { min-width: 0; font-size: 0; }
+  .member-filter select { width: 100%; min-width: 0; min-height: 46px; padding: 10px 32px 10px 12px; font-size: 16px; }
+  .range-control { width: 100%; border-radius: 14px; }
+  .range-control button { min-width: 0; min-height: 40px; border-radius: 11px; padding: 0 4px; font-size: 14px; }
+  .segmented { width: min(260px, 100%); margin: 0 0 24px; }
   .segmented button { padding: 11px; font-size: 18px; }
   .cards-grid { gap: 12px; }
   .empty-state { margin: -14px 0 18px; padding: 17px 18px; }
@@ -408,6 +417,7 @@ button { color: inherit; }
   .stat-card { min-height: 160px; padding: 22px 18px; }
   .stat-card > span { font-size: 15px; }
   .stat-card strong { font-size: 31px; }
+  .stat-card strong small { display: block; margin-top: 4px; font-size: 13px; }
   .stat-card p { font-size: 14px; }
   .whoop-row { gap: 42px; }
   .missing-row { gap: 16px; }
