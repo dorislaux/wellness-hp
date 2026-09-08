@@ -36,6 +36,13 @@
       "when": 1788830000000,
       "tag": "0004_remove_jackie_household",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1788833868761,
+      "tag": "0005_goofy_the_santerians",
+      "breakpoints": true
     }
   ]
 }

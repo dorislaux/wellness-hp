@@ -100,7 +100,7 @@ function HouseholdAccessManager() {
       if (!response.ok) throw new Error("Viewer could not be removed.");
       await loadAccess();
     } catch {
-      setError("The viewer could not be removed.");
+      setError("The household member could not be removed.");
     } finally {
       setBusy(null);
     }
@@ -108,9 +108,9 @@ function HouseholdAccessManager() {
 
   return <div className="settings-section household-access">
     <h3>Household access</h3>
-    <p>Invite a viewer to {access?.householdName ?? "this household"}. The Site administrator must also grant this email access to the private Site.</p>
+    <p>Invite a member to {access?.householdName ?? "this household"}. The Site administrator must also grant this email access to the private Site.</p>
     <form className="access-invite-form" onSubmit={createInvitation}>
-      <label htmlFor="household-viewer-email">Viewer email</label>
+      <label htmlFor="household-viewer-email">Member email</label>
       <div><input id="household-viewer-email" type="email" maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} placeholder="friend@example.com" />
         <button disabled={busy !== null || !email.trim()}>{busy === "invite" ? "Creating…" : "Create invite"}</button></div>
     </form>
@@ -123,20 +123,21 @@ function HouseholdAccessManager() {
           <div><button disabled={busy !== null} onClick={() => decide(request.id, "approved")}>Approve</button><button className="quiet-access" disabled={busy !== null} onClick={() => decide(request.id, "rejected")}>Reject</button></div>
         </div>) : <p className="access-empty">No pending requests.</p>}
       </div>
-      <div className="access-list"><h4>Current viewers</h4>
+      <div className="access-list"><h4>Current household members</h4>
         {access.viewers.length ? access.viewers.map((viewer) => <div className="access-person" key={viewer.userId}>
-          <div><strong>{viewer.displayName ?? viewer.email ?? "Household viewer"}</strong>{viewer.email && <span>{viewer.email}</span>}</div>
+          <div><strong>{viewer.displayName ?? viewer.email ?? "Household member"}</strong>{viewer.email && <span>{viewer.email}</span>}</div>
           <button className="quiet-access" disabled={busy !== null} onClick={() => revoke(viewer.userId)}>Remove</button>
-        </div>) : <p className="access-empty">No viewers have joined this household.</p>}
+        </div>) : <p className="access-empty">No additional members have joined this household.</p>}
       </div>
     </>}
     {error && <p className="connection-error" role="alert">{error}</p>}
   </div>;
 }
 
-function SettingsPanel({ members, canManageHousehold, householdAccessEnabled, theme, onThemeChange, onMemberUpdated, onClose }: {
+function SettingsPanel({ members, canManageHousehold, connectionMemberIds, householdAccessEnabled, theme, onThemeChange, onMemberUpdated, onClose }: {
   members: Member[];
   canManageHousehold: boolean;
+  connectionMemberIds: string[];
   householdAccessEnabled: boolean;
   theme: ThemePreference;
   onThemeChange: (theme: ThemePreference) => void;
@@ -149,6 +150,7 @@ function SettingsPanel({ members, canManageHousehold, householdAccessEnabled, th
   const [newMemberName, setNewMemberName] = useState("");
   const [drafts, setDrafts] = useState<Record<string, { name: string; avatar: Member["avatar"] }>>(() =>
     Object.fromEntries(members.map((member) => [member.id, { name: member.name, avatar: member.avatar }])));
+  const connectionMembers = members.filter((member) => connectionMemberIds.includes(member.id));
 
   useEffect(() => {
     if (!authorization || authorization.status !== "pending") return;
@@ -248,7 +250,7 @@ function SettingsPanel({ members, canManageHousehold, householdAccessEnabled, th
           })}
         </div></div>}
         {canManageHousehold && householdAccessEnabled && <HouseholdAccessManager />}
-        {canManageHousehold && <><div className="settings-section"><h3>Device connections</h3><p className="connection-intro">Choose the person first. Each provider account stays attached to that household member.</p></div>
+        {connectionMembers.length > 0 && <><div className="settings-section"><h3>Device connections</h3><p className="connection-intro">{canManageHousehold ? "Choose the person first. Each provider account stays attached to that household member." : "Connect your own Oura or WHOOP account to your personal card."}</p></div>
         {authorization ? (
           <div className="authorization-step">
             <Image src={authorization.qrCodeDataUrl} width={256} height={256} unoptimized alt={`QR code to authorize ${authorization.provider}`} />
@@ -259,7 +261,7 @@ function SettingsPanel({ members, canManageHousehold, householdAccessEnabled, th
           </div>
         ) : (
           <div className="connection-list">
-            {members.map((member) => (
+            {connectionMembers.map((member) => (
               <div className="connection-member" key={member.id}>
                 <div><strong>{member.name}</strong><span>{member.sources.length ? member.sources.map((source) => source === "whoop" ? "WHOOP" : "Oura").join(" + ") : "No devices connected"}</span></div>
                 <div>
@@ -271,14 +273,14 @@ function SettingsPanel({ members, canManageHousehold, householdAccessEnabled, th
                 </div>
               </div>
             ))}
-            <form className="add-member" onSubmit={addMember}>
+            {canManageHousehold && <form className="add-member" onSubmit={addMember}>
               <label htmlFor="new-member-name">Add household member</label>
               <div><input id="new-member-name" value={newMemberName} maxLength={80}
                 onChange={(event) => setNewMemberName(event.target.value)} placeholder="Name" />
                 <button disabled={busy !== null || !newMemberName.trim()} type="submit">
                   {busy === "new-member" ? "Adding…" : "Add"}
                 </button></div>
-            </form>
+            </form>}
           </div>
         )}</>}
         {error && <p className="connection-error" role="alert">{error}</p>}
@@ -563,7 +565,8 @@ export function WellnessDashboard({ initialSnapshot }: { initialSnapshot: Wellne
       {current.emptyMessage && <section className="empty-state" role="status"><h2>Data not ready</h2><p>{current.emptyMessage}</p></section>}
       {view === "cards" ? <CardsView visibleMembers={visibleMembers} issues={current.issues} onOpen={(member) => setSelectedId(member.id)} />
         : <TimelineView visibleMembers={visibleMembers} historyDates={current.historyDates} />}
-      {settingsOpen && <SettingsPanel members={members} canManageHousehold={snapshot.canManageHousehold} theme={theme}
+      {settingsOpen && <SettingsPanel members={members} canManageHousehold={snapshot.canManageHousehold}
+        connectionMemberIds={snapshot.connectionMemberIds} theme={theme}
         householdAccessEnabled={snapshot.mode === "sites"}
         onThemeChange={changeTheme} onMemberUpdated={updateMember} onClose={() => setSettingsOpen(false)} />}
     </main>

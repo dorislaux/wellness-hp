@@ -102,6 +102,20 @@ export const members = sqliteTable(
   ],
 );
 
+export const householdUserMembers = sqliteTable(
+  "household_user_members",
+  {
+    householdId: text("household_id").notNull().references(() => households.id, { onDelete: "cascade" }),
+    siteUserId: text("site_user_id").notNull(),
+    memberId: text("member_id").notNull().references(() => members.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at").notNull().default(nowMs),
+  },
+  (table) => [
+    primaryKey({ columns: [table.householdId, table.siteUserId] }),
+    uniqueIndex("uq_household_user_members_member_id").on(table.memberId),
+  ],
+);
+
 export const providerConnections = sqliteTable(
   "provider_connections",
   {

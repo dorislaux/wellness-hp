@@ -1,12 +1,15 @@
-import { and, desc, eq, gt, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, max } from "drizzle-orm";
 import type { ChatGPTUser } from "../app/chatgpt-auth";
 import { getDb, type Database } from "./index";
+import { HOUSEHOLD_AVATAR_COLORS, initialsFor } from "./household-store";
 import { retentionPolicy } from "./retention-policy";
 import {
   householdInvitations,
   householdJoinRequests,
+  householdUserMembers,
   householdUsers,
   households,
+  members,
 } from "./schema";
 
 const INVITATION_TTL_MS = retentionPolicy.householdInvitationTtlDays * 24 * 60 * 60 * 1000;
@@ -23,6 +26,7 @@ export type HouseholdAccessErrorCode =
   | "join_request_pending"
   | "join_request_invalid"
   | "requester_already_member"
+  | "household_member_limit_reached"
   | "viewer_invalid";
 
 export class HouseholdAccessError extends Error {
@@ -270,7 +274,54 @@ export async function decideHouseholdJoinRequest(input: {
         revokedAt: null,
       },
     });
-    await db.batch([addViewer, updateRequest, consumeInvitation]);
+    const [linkedMember] = await db.select({ memberId: householdUserMembers.memberId })
+      .from(householdUserMembers)
+      .where(and(
+        eq(householdUserMembers.householdId, input.householdId),
+        eq(householdUserMembers.siteUserId, request.requesterUserId),
+      )).limit(1);
+    const displayName = request.requesterDisplayName.trim().replace(/\s+/g, " ").slice(0, 80) || "Household member";
+    if (linkedMember) {
+      const restoreMember = db.update(members).set({
+        displayName,
+        initials: initialsFor(displayName),
+        active: true,
+        updatedAt: now,
+      }).where(and(
+        eq(members.id, linkedMember.memberId),
+        eq(members.householdId, input.householdId),
+      ));
+      await db.batch([addViewer, restoreMember, updateRequest, consumeInvitation]);
+    } else {
+      const [activeMembers, order] = await Promise.all([
+        db.select({ id: members.id }).from(members).where(and(
+          eq(members.householdId, input.householdId),
+          eq(members.active, true),
+        )),
+        db.select({ value: max(members.displayOrder) }).from(members)
+          .where(eq(members.householdId, input.householdId)),
+      ]);
+      if (activeMembers.length >= 12) throw new HouseholdAccessError("household_member_limit_reached");
+      const displayOrder = (order[0]?.value ?? -1) + 1;
+      const memberId = crypto.randomUUID();
+      const addMember = db.insert(members).values({
+        id: memberId,
+        householdId: input.householdId,
+        displayName,
+        initials: initialsFor(displayName),
+        avatarKey: HOUSEHOLD_AVATAR_COLORS[displayOrder % HOUSEHOLD_AVATAR_COLORS.length] ?? "green",
+        displayOrder,
+        createdAt: now,
+        updatedAt: now,
+      });
+      const linkMember = db.insert(householdUserMembers).values({
+        householdId: input.householdId,
+        siteUserId: request.requesterUserId,
+        memberId,
+        createdAt: now,
+      });
+      await db.batch([addViewer, addMember, linkMember, updateRequest, consumeInvitation]);
+    }
   } else {
     await db.batch([updateRequest, consumeInvitation]);
   }

@@ -10,8 +10,10 @@ import {
 } from "../db/household-access-store.ts";
 import {
   createHouseholdForUser,
+  canManageHouseholdMember,
   getHouseholdContext,
   householdHasMember,
+  listManageableMemberIds,
   listHouseholdMembers,
 } from "../db/household-store.ts";
 import { createTestDatabase } from "./d1-test-helper.mjs";
@@ -36,6 +38,8 @@ test("creates isolated households for separate Site users", async () => {
     assert.equal((await getHouseholdContext(jordan, db))?.timezone, "Asia/Shanghai");
     assert.equal((await listHouseholdMembers(alexHousehold.householdId, db)).length, 1);
     assert.equal((await listHouseholdMembers(jordanHousehold.householdId, db)).length, 1);
+    assert.deepEqual(await listManageableMemberIds(alexHousehold, alex.userId, db),
+      [(await listHouseholdMembers(alexHousehold.householdId, db))[0].id]);
     assert.equal(await householdHasMember(alexHousehold.householdId,
       (await listHouseholdMembers(jordanHousehold.householdId, db))[0].id, db), false);
   } finally {
@@ -78,6 +82,18 @@ test("requires an email-bound invitation and owner approval before membership", 
       role: "viewer",
       timezone: "UTC",
     });
+    const householdMembers = await listHouseholdMembers(household.householdId, db);
+    const viewerMember = householdMembers.find((member) => member.name === "Viewer");
+    const ownerMember = householdMembers.find((member) => member.name === "Owner");
+    assert.equal(householdMembers.length, 2);
+    assert.ok(viewerMember);
+    assert.ok(ownerMember);
+    const viewerContext = await getHouseholdContext(viewer, db);
+    assert.ok(viewerContext);
+    assert.deepEqual(await listManageableMemberIds(viewerContext, viewer.userId, db), [viewerMember.id]);
+    assert.equal(await canManageHouseholdMember(viewerContext, viewer.userId, viewerMember.id, db), true);
+    assert.equal(await canManageHouseholdMember(viewerContext, viewer.userId, ownerMember.id, db), false);
+    assert.equal(await canManageHouseholdMember(household, owner.userId, viewerMember.id, db), true);
 
     await revokeHouseholdViewer({
       householdId: household.householdId,

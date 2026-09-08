@@ -31,9 +31,10 @@ unassigned tester can create an isolated household and become its owner, or use
 an email-bound household invitation to submit a join request. A join request
 does not grant data access until that household's owner approves it in Settings.
 
-Household owners can invite, approve, reject, and remove viewers. Viewers are
-read-only: they cannot add members, change member profiles, manage household
-access, or start provider authorization.
+Household owners can invite, approve, reject, and remove household members.
+Approval automatically creates a personal dashboard card for the joiner. A
+joiner can connect or reconnect Oura and WHOOP only for that personal card;
+they cannot add other cards, change household profiles, or manage access.
 
 ## Live data boundary
 

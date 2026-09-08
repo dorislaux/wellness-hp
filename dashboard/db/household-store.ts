@@ -1,7 +1,7 @@
 import { and, asc, eq, isNull, max } from "drizzle-orm";
 import type { ChatGPTUser } from "../app/chatgpt-auth";
 import { getDb, type Database } from "./index";
-import { householdUsers, households, members } from "./schema";
+import { householdUserMembers, householdUsers, households, members } from "./schema";
 
 export type HouseholdContext = {
   householdId: string;
@@ -141,6 +141,11 @@ export async function createHouseholdForUser(
       avatarKey: "green",
       displayOrder: 0,
     }),
+    db.insert(householdUserMembers).values({
+      householdId,
+      siteUserId: user.userId,
+      memberId,
+    }),
   ]);
   return { householdId, role: "owner", timezone };
 }
@@ -174,4 +179,38 @@ export async function householdHasMember(
     .where(and(eq(members.householdId, householdId), eq(members.id, memberId), eq(members.active, true)))
     .limit(1);
   return Boolean(row);
+}
+
+export async function listManageableMemberIds(
+  household: HouseholdContext,
+  siteUserId: string,
+  database?: Database,
+): Promise<string[]> {
+  const db = database ?? await getDb();
+  if (household.role === "owner") {
+    const rows = await db.select({ id: members.id }).from(members).where(and(
+      eq(members.householdId, household.householdId),
+      eq(members.active, true),
+    ));
+    return rows.map((row) => row.id);
+  }
+  const rows = await db.select({ id: householdUserMembers.memberId })
+    .from(householdUserMembers)
+    .innerJoin(members, eq(members.id, householdUserMembers.memberId))
+    .where(and(
+      eq(householdUserMembers.householdId, household.householdId),
+      eq(householdUserMembers.siteUserId, siteUserId),
+      eq(members.householdId, household.householdId),
+      eq(members.active, true),
+    ));
+  return rows.map((row) => row.id);
+}
+
+export async function canManageHouseholdMember(
+  household: HouseholdContext,
+  siteUserId: string,
+  memberId: string,
+  database?: Database,
+): Promise<boolean> {
+  return (await listManageableMemberIds(household, siteUserId, database)).includes(memberId);
 }

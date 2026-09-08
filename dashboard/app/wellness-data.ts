@@ -1,5 +1,5 @@
 import type { ChatGPTUser } from "./chatgpt-auth";
-import { requireHouseholdContext } from "../db/household-store";
+import { listManageableMemberIds, requireHouseholdContext } from "../db/household-store";
 import { listHouseholdConnections, readHouseholdDailyData } from "../db/wellness-store";
 import { members as mockMembers, readinessTone, type Contributor, type Member } from "./mock-data";
 import { dateInTimezone, syncHousehold } from "./provider-sync";
@@ -26,6 +26,7 @@ export type WellnessSnapshot = {
   date: string;
   mode: "mock" | "sites";
   canManageHousehold: boolean;
+  connectionMemberIds: string[];
   rangeOptions: Array<{ value: RangeKey; label: string }>;
   ranges: Record<RangeKey, RangeView>;
 };
@@ -92,6 +93,7 @@ function mockSnapshot(): WellnessSnapshot {
     date: MOCK_DATE,
     mode: "mock",
     canManageHousehold: true,
+    connectionMemberIds: mockMembers.map((member) => member.id),
     rangeOptions: RANGE_OPTIONS,
     ranges: { last7: mockView("last7"), last14: mockView("last14"), last30: mockView("last30") },
   };
@@ -191,14 +193,16 @@ async function sitesSnapshot(user: ChatGPTUser, refresh: boolean): Promise<Welln
     ? await syncHousehold(household.householdId, household.timezone)
     : dateInTimezone(new Date(), household.timezone);
   const startDate = shiftDate(date, -29);
-  const [stored, connections] = await Promise.all([
+  const [stored, connections, connectionMemberIds] = await Promise.all([
     readHouseholdDailyData({ householdId: household.householdId, startDate, endDate: date }),
     listHouseholdConnections(household.householdId),
+    listManageableMemberIds(household, user.userId),
   ]);
   return {
     date,
     mode: "sites",
     canManageHousehold: household.role === "owner",
+    connectionMemberIds,
     rangeOptions: RANGE_OPTIONS,
     ranges: {
       last7: buildRangeView({ range: "last7", date, stored, connections }),

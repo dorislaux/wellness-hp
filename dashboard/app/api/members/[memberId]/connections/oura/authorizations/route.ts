@@ -1,7 +1,7 @@
 import { getChatGPTUser } from "../../../../../../chatgpt-auth";
 import { buildOuraAuthorizationUrl, OURA_SCOPES } from "../../../../../../providers/oura";
 import { createOpaqueOAuthState, hashOAuthState } from "../../../../../../provider-crypto";
-import { getHouseholdContext, householdHasMember } from "../../../../../../../db/household-store";
+import { canManageHouseholdMember, getHouseholdContext } from "../../../../../../../db/household-store";
 import { createOAuthSession } from "../../../../../../../db/oauth-session-store";
 import QRCode from "qrcode";
 
@@ -18,10 +18,9 @@ export async function POST(_request: Request, context: { params: Promise<{ membe
   if (!user) return Response.json({ error: "authentication_required" }, { status: 401, headers: NO_STORE_HEADERS });
   const household = await getHouseholdContext(user);
   if (!household) return Response.json({ error: "household_membership_required" }, { status: 403, headers: NO_STORE_HEADERS });
-  if (household.role !== "owner") return Response.json({ error: "owner_access_required" }, { status: 403, headers: NO_STORE_HEADERS });
   try {
     const { memberId } = await context.params;
-    if (!(await householdHasMember(household.householdId, memberId)))
+    if (!(await canManageHouseholdMember(household, user.userId, memberId)))
       return Response.json({ error: "member_not_found" }, { status: 404, headers: NO_STORE_HEADERS });
     const state = createOpaqueOAuthState();
     const id = crypto.randomUUID();
