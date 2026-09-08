@@ -55,7 +55,7 @@ class TestD1Database {
 export function createTestDatabase() {
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec("PRAGMA foreign_keys = ON");
-  for (const migration of ["0000_silent_hulk.sql", "0001_ambitious_master_chief.sql", "0002_yielding_doctor_spectrum.sql", "0003_tan_wrecker.sql", "0004_remove_jackie_household.sql", "0005_goofy_the_santerians.sql"]) {
+  for (const migration of ["0000_silent_hulk.sql", "0001_ambitious_master_chief.sql", "0002_yielding_doctor_spectrum.sql", "0003_tan_wrecker.sql", "0004_remove_jackie_household.sql", "0005_goofy_the_santerians.sql", "0008_cold_salo.sql"]) {
     sqlite.exec(readFileSync(new URL(`../drizzle/${migration}`, import.meta.url), "utf8"));
   }
   const d1 = new TestD1Database(sqlite);

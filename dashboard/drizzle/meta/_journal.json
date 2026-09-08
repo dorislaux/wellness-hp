@@ -57,6 +57,13 @@
       "when": 1788862714322,
       "tag": "0007_sad_riptide",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1788867105358,
+      "tag": "0008_cold_salo",
+      "breakpoints": true
     }
   ]
 }

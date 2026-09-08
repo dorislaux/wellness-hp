@@ -1,6 +1,7 @@
 import type { ChatGPTUser } from "./chatgpt-auth";
 import { listManageableMemberIds, requireHouseholdContext } from "../db/household-store";
-import { listHouseholdConnections, readHouseholdDailyData } from "../db/wellness-store";
+import { listHouseholdConnections, readHouseholdDailyData, readWellnessSnapshotCache,
+  replaceWellnessSnapshotCache } from "../db/wellness-store";
 import { members as mockMembers, readinessTone, type Contributor, type Member } from "./mock-data";
 import { dateInTimezone, syncHousehold } from "./provider-sync";
 
@@ -30,6 +31,8 @@ export type WellnessSnapshot = {
   rangeOptions: Array<{ value: RangeKey; label: string }>;
   ranges: Record<RangeKey, RangeView>;
 };
+
+type CachedSnapshot = Pick<WellnessSnapshot, "date" | "mode" | "rangeOptions" | "ranges">;
 
 const MOCK_DATE = "2026-08-10";
 export const RANGE_OPTIONS: WellnessSnapshot["rangeOptions"] = [
@@ -108,6 +111,17 @@ function mockSnapshot(): WellnessSnapshot {
     rangeOptions: RANGE_OPTIONS,
     ranges: { today: mockView("today"), last7: mockView("last7"), last14: mockView("last14"), last30: mockView("last30") },
   };
+}
+
+function parseCachedSnapshot(value: string, date: string): CachedSnapshot | null {
+  try {
+    const parsed = JSON.parse(value) as Partial<CachedSnapshot>;
+    if (parsed.date !== date || parsed.mode !== "sites" || !parsed.ranges || !Array.isArray(parsed.rangeOptions)) return null;
+    if (!parsed.ranges.today || !parsed.ranges.last7 || !parsed.ranges.last14 || !parsed.ranges.last30) return null;
+    return parsed as CachedSnapshot;
+  } catch {
+    return null;
+  }
 }
 
 type StoredData = Awaited<ReturnType<typeof readHouseholdDailyData>>;
@@ -241,16 +255,24 @@ export function buildRangeView(input: {
 
 async function sitesSnapshot(user: ChatGPTUser, refresh: boolean): Promise<WellnessSnapshot> {
   const household = await requireHouseholdContext(user);
-  const date = refresh
-    ? await syncHousehold(household.householdId, household.timezone)
-    : dateInTimezone(new Date(), household.timezone);
+  let date = dateInTimezone(new Date(), household.timezone);
+  if (!refresh) {
+    const [cached, connectionMemberIds] = await Promise.all([
+      readWellnessSnapshotCache(household.householdId, date),
+      listManageableMemberIds(household, user.userId),
+    ]);
+    const parsed = cached ? parseCachedSnapshot(cached.snapshotJson, date) : null;
+    if (parsed) return { ...parsed, canManageHousehold: household.role === "owner", connectionMemberIds };
+  } else {
+    date = await syncHousehold(household.householdId, household.timezone);
+  }
   const startDate = shiftDate(date, -29);
   const [stored, connections, connectionMemberIds] = await Promise.all([
     readHouseholdDailyData({ householdId: household.householdId, startDate, endDate: date }),
     listHouseholdConnections(household.householdId),
     listManageableMemberIds(household, user.userId),
   ]);
-  return {
+  const snapshot: WellnessSnapshot = {
     date,
     mode: "sites",
     canManageHousehold: household.role === "owner",
@@ -263,6 +285,11 @@ async function sitesSnapshot(user: ChatGPTUser, refresh: boolean): Promise<Welln
       last30: buildRangeView({ range: "last30", date, stored, connections, timezone: household.timezone }),
     },
   };
+  const cached: CachedSnapshot = { date: snapshot.date, mode: snapshot.mode,
+    rangeOptions: snapshot.rangeOptions, ranges: snapshot.ranges };
+  await replaceWellnessSnapshotCache({ householdId: household.householdId, localDate: date,
+    snapshotJson: JSON.stringify(cached) });
+  return snapshot;
 }
 
 export async function getWellnessSnapshot(user?: ChatGPTUser, options: { refresh?: boolean } = {}): Promise<WellnessSnapshot> {

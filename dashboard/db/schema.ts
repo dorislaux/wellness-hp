@@ -20,6 +20,16 @@ export const households = sqliteTable("households", {
   updatedAt: integer("updated_at").notNull().default(nowMs),
 });
 
+export const wellnessSnapshotCache = sqliteTable("wellness_snapshot_cache", {
+  householdId: text("household_id").primaryKey().references(() => households.id, { onDelete: "cascade" }),
+  localDate: text("local_date").notNull(),
+  schemaVersion: integer("schema_version").notNull().default(1),
+  snapshotJson: text("snapshot_json").notNull(),
+  generatedAt: integer("generated_at").notNull().default(nowMs),
+}, (table) => [
+  check("ck_wellness_snapshot_cache_schema_version", sql`${table.schemaVersion} > 0`),
+]);
+
 export const householdUsers = sqliteTable(
   "household_users",
   {

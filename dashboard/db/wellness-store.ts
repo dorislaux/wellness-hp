@@ -1,11 +1,38 @@
 import { and, asc, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { getDb, type Database } from "./index";
-import { dailySourceRecords, members, providerConnections, sleepStageSegments } from "./schema";
+import { dailySourceRecords, members, providerConnections, sleepStageSegments, wellnessSnapshotCache } from "./schema";
 import { writeBatches } from "./write-batches";
 
 export type DailyRecordInput = typeof dailySourceRecords.$inferInsert;
 export type SleepStageInput = typeof sleepStageSegments.$inferInsert;
 const SLEEP_STAGE_INSERT_BATCH_SIZE = 12;
+const SNAPSHOT_SCHEMA_VERSION = 1;
+
+export async function readWellnessSnapshotCache(householdId: string, localDate: string, database?: Database) {
+  const db = database ?? await getDb();
+  const [cached] = await db.select({ snapshotJson: wellnessSnapshotCache.snapshotJson,
+    generatedAt: wellnessSnapshotCache.generatedAt }).from(wellnessSnapshotCache)
+    .where(and(eq(wellnessSnapshotCache.householdId, householdId),
+      eq(wellnessSnapshotCache.localDate, localDate),
+      eq(wellnessSnapshotCache.schemaVersion, SNAPSHOT_SCHEMA_VERSION))).limit(1);
+  return cached ?? null;
+}
+
+export async function replaceWellnessSnapshotCache(input: {
+  householdId: string;
+  localDate: string;
+  snapshotJson: string;
+}, database?: Database) {
+  const db = database ?? await getDb();
+  const generatedAt = Date.now();
+  await db.insert(wellnessSnapshotCache).values({ ...input, schemaVersion: SNAPSHOT_SCHEMA_VERSION, generatedAt })
+    .onConflictDoUpdate({ target: wellnessSnapshotCache.householdId, set: {
+      localDate: input.localDate,
+      schemaVersion: SNAPSHOT_SCHEMA_VERSION,
+      snapshotJson: input.snapshotJson,
+      generatedAt,
+    } });
+}
 
 export async function listHouseholdConnections(householdId: string, database?: Database) {
   const db = database ?? await getDb();
