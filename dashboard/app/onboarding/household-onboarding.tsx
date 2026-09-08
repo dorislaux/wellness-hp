@@ -73,8 +73,10 @@ export function HouseholdOnboarding({ displayName, initialInvite, pending: initi
       <p className="eyebrow">Household request sent</p>
       <h1>Waiting for approval</h1>
       <p>The owner of <strong>{pending.householdName}</strong> must confirm your request before any household data becomes visible.</p>
-      <button className="primary-action" onClick={() => window.location.reload()}>Check approval</button>
-      <a href="/signout-with-chatgpt?return_to=%2F">Sign in with a different account</a>
+      <div className="pending-actions">
+        <button className="primary-action" onClick={() => window.location.reload()}>Check approval</button>
+        <a href="/signout-with-chatgpt?return_to=%2F">Sign in with a different account</a>
+      </div>
     </section></main>;
   }
 

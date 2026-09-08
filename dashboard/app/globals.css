@@ -307,6 +307,13 @@ button { color: inherit; }
 .onboarding-form .primary-action { margin-top: 4px; }
 .onboarding-form .quiet-button { justify-self: center; }
 .onboarding-card > .primary-action { display: inline-block; margin-right: 14px; }
+.pending-actions { display: grid; gap: 12px; }
+.pending-actions .primary-action, .pending-actions a {
+  display: grid; place-items: center; width: 100%; min-height: 50px; margin: 0;
+  border-radius: 12px; font-size: 16px; line-height: 1; text-align: center;
+  white-space: nowrap;
+}
+.pending-actions a { border: 1px solid var(--line); text-decoration: none; }
 
 @media (max-width: 980px) {
   .cards-grid { grid-template-columns: 1fr; }
@@ -319,6 +326,9 @@ button { color: inherit; }
 }
 
 @media (max-width: 700px) {
+  .access-page { padding: 16px; }
+  .onboarding-card { padding: 28px 24px; }
+  .pending-actions .primary-action, .pending-actions a { font-size: clamp(14px, 4vw, 16px); }
   .dashboard-shell, .detail-page { padding: 18px 14px 32px; }
   .dashboard-header { align-items: start; }
   .header-actions { align-items: end; flex-direction: column-reverse; }
