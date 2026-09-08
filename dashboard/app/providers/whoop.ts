@@ -255,6 +255,9 @@ export function normalizeWhoopDay(input: {
   return {
     status: "complete" as const,
     recoveryScore: finiteNumber(recoveryScore?.recovery_score),
+    sleepAverageHrvMs: finiteNumber(recoveryScore?.hrv_rmssd_milli),
+    sleepAverageHeartRateBpm: finiteNumber(recoveryScore?.resting_heart_rate),
+    skinTemperatureC: finiteNumber(recoveryScore?.skin_temp_celsius),
     dayStrain: finiteNumber(cycleScore?.strain),
     totalCalories: kilojoule === null ? null : Math.round(kilojoule / 4.184),
     sleepTotalSeconds,

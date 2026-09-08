@@ -50,6 +50,13 @@
       "when": 1788860803631,
       "tag": "0006_fluffy_rocket_raccoon",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1788862714322,
+      "tag": "0007_sad_riptide",
+      "breakpoints": true
     }
   ]
 }

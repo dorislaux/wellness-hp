@@ -66,11 +66,15 @@ test("normalizes recovery and strain by the sleep ending on the selected local d
         total_light_sleep_time_milli: 14_400_000, total_slow_wave_sleep_time_milli: 5_400_000,
         total_rem_sleep_time_milli: 7_200_000,
       } } }],
-    recoveries: [{ sleep_id: "sleep-1", score_state: "SCORED", score: { recovery_score: 82 }, updated_at: "2026-08-03T22:36:00Z" }],
+    recoveries: [{ sleep_id: "sleep-1", score_state: "SCORED", score: { recovery_score: 82,
+      hrv_rmssd_milli: 48.6, resting_heart_rate: 57, skin_temp_celsius: 33.8 }, updated_at: "2026-08-03T22:36:00Z" }],
     cycles: [{ id: 7, score_state: "SCORED", score: { strain: 14.2, kilojoule: 8_368 }, updated_at: "2026-08-03T22:37:00Z" }],
   });
   assert.equal(normalized.status, "complete");
   assert.equal(normalized.recoveryScore, 82);
+  assert.equal(normalized.sleepAverageHrvMs, 48.6);
+  assert.equal(normalized.sleepAverageHeartRateBpm, 57);
+  assert.equal(normalized.skinTemperatureC, 33.8);
   assert.equal(normalized.dayStrain, 14.2);
   assert.equal(normalized.totalCalories, 2000);
   assert.equal(normalized.sleepTotalSeconds, 27_000);

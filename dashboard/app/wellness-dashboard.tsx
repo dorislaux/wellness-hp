@@ -570,15 +570,26 @@ export function WellnessDashboard({ initialSnapshot }: { initialSnapshot: Wellne
   useEffect(() => {
     if (initialSnapshot.mode !== "sites") return;
     const controller = new AbortController();
-    fetch("/api/wellness", { headers: { Accept: "application/json" }, cache: "no-store", signal: controller.signal })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("Sync failed");
-        return response.json() as Promise<WellnessSnapshot>;
-      })
-      .then((fresh) => setSnapshot(fresh))
+    const refresh = () => fetch("/api/wellness", {
+      headers: { Accept: "application/json" }, cache: "no-store", signal: controller.signal,
+    }).then(async (response) => {
+      if (!response.ok) throw new Error("Sync failed");
+      return response.json() as Promise<WellnessSnapshot>;
+    }).then((fresh) => setSnapshot(fresh))
       .catch((error) => { if (error instanceof Error && error.name !== "AbortError") setSyncFailed(true); })
       .finally(() => { if (!controller.signal.aborted) setSyncing(false); });
-    return () => controller.abort();
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    const idleId = idleWindow.requestIdleCallback
+      ? idleWindow.requestIdleCallback(refresh, { timeout: 1200 })
+      : window.setTimeout(refresh, 250);
+    return () => {
+      controller.abort();
+      if (idleWindow.cancelIdleCallback) idleWindow.cancelIdleCallback(idleId);
+      else window.clearTimeout(idleId);
+    };
   }, [initialSnapshot.mode]);
 
   function changeTheme(preference: ThemePreference) {

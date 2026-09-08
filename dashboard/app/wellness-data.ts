@@ -67,6 +67,11 @@ function average(values: Array<number | null>, digits = 1): number | null {
   return Math.round((present.reduce((sum, value) => sum + value, 0) / present.length) * factor) / factor;
 }
 
+function difference(value: number | null, baseline: number | null): number | null {
+  if (value === null || baseline === null) return null;
+  return Math.round((value - baseline) * 10) / 10;
+}
+
 function contributor(label: string, score: number | null): Contributor {
   const tone = readinessTone(score);
   return { label, score, status: tone === "missing" ? "low" : tone };
@@ -113,7 +118,7 @@ function memberAvatar(value: string): Member["avatar"] {
     ? value as Member["avatar"] : "green";
 }
 
-function buildRangeView(input: {
+export function buildRangeView(input: {
   range: RangeKey;
   date: string;
   stored: StoredData;
@@ -127,6 +132,7 @@ function buildRangeView(input: {
   const liveMembers: Member[] = input.stored.members.map((stored) => {
     const memberRecords = input.stored.records.filter((item) => item.memberId === stored.id);
     const ouraRecords = memberRecords.filter((item) => item.provider === "oura");
+    const whoopRecords = memberRecords.filter((item) => item.provider === "whoop");
     const periodRecords = memberRecords.filter((item) => item.localDate >= periodStart && item.localDate <= input.date);
     const sources = input.connections.filter((item) => item.memberId === stored.id && item.status !== "disconnected")
       .map((item) => item.provider);
@@ -152,8 +158,18 @@ function buildRangeView(input: {
     }
 
     const readiness = average(activeOuraRecords.map((item) => item.readinessScore));
-    const overnightHrv = average(activeOuraRecords.map((item) => item.sleepAverageHrvMs));
-    const sleepAverageHeartRate = average(activeOuraRecords.map((item) => item.sleepAverageHeartRateBpm));
+    const ouraHrv = average(activeOuraRecords.map((item) => item.sleepAverageHrvMs));
+    const whoopHrv = average(activeWhoopRecords.map((item) => item.sleepAverageHrvMs));
+    const ouraHeartRate = average(activeOuraRecords.map((item) => item.sleepAverageHeartRateBpm));
+    const whoopHeartRate = average(activeWhoopRecords.map((item) => item.sleepAverageHeartRateBpm));
+    const ouraTemperatureDeviation = average(activeOuraRecords.map((item) => item.bodyTemperatureDeviationC));
+    const whoopSkinTemperature = average(activeWhoopRecords.map((item) => item.skinTemperatureC));
+    const ouraCompleteRecords = ouraRecords.filter((item) => item.status === "complete");
+    const whoopCompleteRecords = whoopRecords.filter((item) => item.status === "complete");
+    const useOuraHrv = ouraHrv !== null;
+    const useOuraHeartRate = ouraHeartRate !== null;
+    const overnightHrv = ouraHrv ?? whoopHrv;
+    const sleepAverageHeartRate = ouraHeartRate ?? whoopHeartRate;
     const ouraSleepMinutes = average(activeOuraRecords.map((item) => item.sleepTotalSeconds === null ? null : item.sleepTotalSeconds / 60));
     const ouraDeepSleepMinutes = average(activeOuraRecords.map((item) => item.deepSleepSeconds === null ? null : item.deepSleepSeconds / 60));
     const ouraCalories = average(activeOuraRecords.map((item) => item.totalCalories));
@@ -173,10 +189,12 @@ function buildRangeView(input: {
       readinessAverage: average(ouraRecords.filter((item) => item.status === "complete").map((item) => item.readinessScore)),
       recovery: average(activeWhoopRecords.map((item) => item.recoveryScore)),
       overnightHrv,
-      hrvBaseline: average(ouraRecords.filter((item) => item.status === "complete").map((item) => item.sleepAverageHrvMs)),
+      hrvBaseline: average((useOuraHrv ? ouraCompleteRecords : whoopCompleteRecords).map((item) => item.sleepAverageHrvMs)),
       sleepAverageHeartRate,
-      heartRateBaseline: average(ouraRecords.filter((item) => item.status === "complete").map((item) => item.sleepAverageHeartRateBpm)),
-      bodyTemperatureDeviationC: average(activeOuraRecords.map((item) => item.bodyTemperatureDeviationC)),
+      heartRateBaseline: average((useOuraHeartRate ? ouraCompleteRecords : whoopCompleteRecords)
+        .map((item) => item.sleepAverageHeartRateBpm)),
+      bodyTemperatureDeviationC: ouraTemperatureDeviation ?? difference(whoopSkinTemperature,
+        average(whoopCompleteRecords.map((item) => item.skinTemperatureC))),
       respiratoryRate: ouraRespiratoryRate ?? average(activeWhoopRecords.map((item) => item.respiratoryRate)),
       sleepMinutes: ouraSleepMinutes ?? average(activeWhoopRecords.map((item) => item.sleepTotalSeconds === null ? null : item.sleepTotalSeconds / 60)),
       deepSleepMinutes: ouraDeepSleepMinutes ?? average(activeWhoopRecords.map((item) => item.deepSleepSeconds === null ? null : item.deepSleepSeconds / 60)),

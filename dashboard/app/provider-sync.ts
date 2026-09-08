@@ -45,9 +45,9 @@ async function validAccessToken(connection: Connection) {
   return rotated.accessToken;
 }
 
-async function syncOura(connection: Connection, date: string) {
+async function syncOura(connection: Connection, date: string, lookbackDays: number) {
   const accessToken = await validAccessToken(connection);
-  const startDate = shiftDate(date, -29);
+  const startDate = shiftDate(date, -lookbackDays);
   const stageStartDate = shiftDate(date, -6);
   const [activities, readiness, sleeps] = await Promise.all([
     getOuraCollection("daily_activity", accessToken, startDate, date),
@@ -83,9 +83,9 @@ async function syncOura(connection: Connection, date: string) {
   await upsertDailyRecords(records);
 }
 
-async function syncWhoop(connection: Connection, date: string) {
+async function syncWhoop(connection: Connection, date: string, lookbackDays: number) {
   const accessToken = await validAccessToken(connection);
-  const startDate = shiftDate(date, -29);
+  const startDate = shiftDate(date, -lookbackDays);
   const start = `${shiftDate(startDate, -1)}T00:00:00.000Z`;
   const [cycles, recoveries, sleeps] = await Promise.all([
     getWhoopCollection("cycles", accessToken, start, null),
@@ -97,6 +97,9 @@ async function syncWhoop(connection: Connection, date: string) {
     const normalized = normalizeWhoopDay({ date: cursor, cycles, recoveries, sleeps });
     const persisted = normalized.status === "complete" ? {
       recoveryScore: normalized.recoveryScore,
+      sleepAverageHrvMs: normalized.sleepAverageHrvMs,
+      sleepAverageHeartRateBpm: normalized.sleepAverageHeartRateBpm,
+      skinTemperatureC: normalized.skinTemperatureC,
       dayStrain: normalized.dayStrain,
       totalCalories: normalized.totalCalories,
       sleepTotalSeconds: normalized.sleepTotalSeconds,
@@ -127,10 +130,17 @@ function diagnosticCode(error: unknown): string {
   return "unexpected";
 }
 
-async function syncConnection(connection: Connection, date: string) {
+function lookbackDays(connection: Connection, now: Date): number {
+  if (connection.lastSuccessAt === null) return 29;
+  const daysSinceSuccess = Math.ceil((now.valueOf() - connection.lastSuccessAt) / (24 * 60 * 60 * 1000));
+  return Math.min(29, Math.max(2, daysSinceSuccess + 1));
+}
+
+async function syncConnection(connection: Connection, date: string, now: Date) {
   try {
-    if (connection.provider === "oura") await syncOura(connection, date);
-    else await syncWhoop(connection, date);
+    const days = lookbackDays(connection, now);
+    if (connection.provider === "oura") await syncOura(connection, date, days);
+    else await syncWhoop(connection, date, days);
     await markConnectionAttempt(connection.id, "connected", true);
   } catch (error) {
     const code = errorCode(error);
@@ -144,8 +154,10 @@ async function syncConnection(connection: Connection, date: string) {
 export async function syncHousehold(householdId: string, timezone: string, now = new Date()) {
   const date = dateInTimezone(now, timezone);
   const connections = await listHouseholdConnections(householdId);
-  await Promise.all(connections.filter((item) => item.status !== "disconnected")
-    .map((connection) => syncConnection(connection, date)));
+  const recentThreshold = now.valueOf() - 5 * 60 * 1000;
+  await Promise.all(connections.filter((item) => item.status !== "disconnected" &&
+      (item.lastSuccessAt === null || item.lastSuccessAt < recentThreshold))
+    .map((connection) => syncConnection(connection, date, now)));
   await enforceRetention(date, now.valueOf());
   return date;
 }

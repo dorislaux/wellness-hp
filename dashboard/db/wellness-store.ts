@@ -11,7 +11,7 @@ export async function listHouseholdConnections(householdId: string, database?: D
   const db = database ?? await getDb();
   return db.select({ id: providerConnections.id, memberId: providerConnections.memberId,
     provider: providerConnections.provider, status: providerConnections.status,
-    grantedScopes: providerConnections.grantedScopes })
+    grantedScopes: providerConnections.grantedScopes, lastSuccessAt: providerConnections.lastSuccessAt })
     .from(providerConnections).innerJoin(members, eq(providerConnections.memberId, members.id))
     .where(and(eq(members.householdId, householdId), eq(members.active, true)))
     .orderBy(asc(members.displayOrder));
@@ -38,6 +38,7 @@ export async function upsertDailyRecords(records: DailyRecordInput[], database?:
         sleepBalanceScore: item.sleepBalanceScore ?? null,
         bodyTemperatureContributorScore: item.bodyTemperatureContributorScore ?? null,
         bodyTemperatureDeviationC: item.bodyTemperatureDeviationC ?? null,
+        skinTemperatureC: item.skinTemperatureC ?? null,
         previousDayActivityScore: item.previousDayActivityScore ?? null,
         totalCalories: item.totalCalories ?? null,
         sleepAverageHeartRateBpm: item.sleepAverageHeartRateBpm ?? null,
@@ -72,12 +73,14 @@ export async function readHouseholdDailyData(input: { householdId: string; start
     .where(and(eq(members.householdId, input.householdId), eq(members.active, true))).orderBy(asc(members.displayOrder));
   const ids = householdMembers.map((member) => member.id);
   if (!ids.length) return { members: householdMembers, records: [], stages: [] };
-  const records = await db.select().from(dailySourceRecords).where(and(inArray(dailySourceRecords.memberId, ids),
-    gte(dailySourceRecords.localDate, input.startDate), lte(dailySourceRecords.localDate, input.endDate)))
-    .orderBy(desc(dailySourceRecords.localDate));
   const stageDate = input.stageDate ?? input.endDate;
-  const stages = await db.select().from(sleepStageSegments).where(and(inArray(sleepStageSegments.memberId, ids),
-    eq(sleepStageSegments.localDate, stageDate), eq(sleepStageSegments.provider, "oura")))
-    .orderBy(asc(sleepStageSegments.position));
+  const [records, stages] = await Promise.all([
+    db.select().from(dailySourceRecords).where(and(inArray(dailySourceRecords.memberId, ids),
+      gte(dailySourceRecords.localDate, input.startDate), lte(dailySourceRecords.localDate, input.endDate)))
+      .orderBy(desc(dailySourceRecords.localDate)),
+    db.select().from(sleepStageSegments).where(and(inArray(sleepStageSegments.memberId, ids),
+      eq(sleepStageSegments.localDate, stageDate), eq(sleepStageSegments.provider, "oura")))
+      .orderBy(asc(sleepStageSegments.position)),
+  ]);
   return { members: householdMembers, records, stages };
 }
