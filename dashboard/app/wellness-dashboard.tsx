@@ -474,22 +474,24 @@ function DayDetail({ member, dateLabel, issues, isToday, onBack }: { member: Mem
         <div><h1>{member.name}</h1><p>{dateLabel} · <ProviderLabel member={member} /></p></div>
       </header>
 
-      <section className="panel readiness-panel">
-        <div className={`score-ring ${readinessTone(member.readiness)}`}>{formatMetric(member.readiness)}</div>
-        <div className="readiness-copy">
-          <h2>{isToday ? "Readiness" : "Average readiness"}{readinessDelta === null ? "" : ` · ${readinessDelta >= 0 ? "above usual" : "below usual"}`}</h2>
-          <p>{readinessDelta === null ? "Readiness or baseline is unavailable." : `${readinessDelta >= 0 ? "Higher" : "Lower"} than ${member.name}'s 30-day average of ${formatMetric(member.readinessAverage)}`}</p>
-        </div>
-        <div className="contributors">
-          {member.contributors.map((contributor) => (
-            <div className="contributor" key={contributor.label}>
-              <span>{contributor.label}</span>
-              <div className="track"><i className={contributor.status} style={{ width: `${contributor.score ?? 0}%` }} /></div>
-              <b className={contributor.score === null ? "muted" : contributor.status}>{contributor.score === null ? "unavailable" : contributor.status}</b>
-            </div>
-          ))}
-        </div>
-      </section>
+      {member.sources.includes("oura") && member.readiness !== null && (
+        <section className="panel readiness-panel">
+          <div className={`score-ring ${readinessTone(member.readiness)}`}>{formatMetric(member.readiness)}</div>
+          <div className="readiness-copy">
+            <h2>{isToday ? "Readiness" : "Average readiness"}{readinessDelta === null ? "" : ` · ${readinessDelta >= 0 ? "above usual" : "below usual"}`}</h2>
+            <p>{readinessDelta === null ? "Readiness baseline is unavailable." : `${readinessDelta >= 0 ? "Higher" : "Lower"} than ${member.name}'s 30-day average of ${formatMetric(member.readinessAverage)}`}</p>
+          </div>
+          <div className="contributors">
+            {member.contributors.map((contributor) => (
+              <div className="contributor" key={contributor.label}>
+                <span>{contributor.label}</span>
+                <div className="track"><i className={contributor.status} style={{ width: `${contributor.score ?? 0}%` }} /></div>
+                <b className={contributor.score === null ? "muted" : contributor.status}>{contributor.score === null ? "unavailable" : contributor.status}</b>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {issues.filter((issue) => issue.memberId === member.id && issue.code !== "not_connected").map((issue) => (
         <section className="panel missing-row" key={`${issue.source}:${issue.code}`}>
