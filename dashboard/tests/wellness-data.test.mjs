@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildRangeView } from "../app/wellness-data.ts";
+import { buildRangeView, parseCachedSnapshot } from "../app/wellness-data.ts";
+
+test("rejects snapshots saved before the primary score and timeline fallback were added", () => {
+  const oldView = { historyDates: ["2026-09-17"], members: [{ readiness: 80, readinessHistory: [80] }] };
+  const oldSnapshot = { date: "2026-09-17", mode: "sites", rangeOptions: [],
+    ranges: { today: oldView, last7: oldView, last14: oldView, last30: oldView } };
+  assert.equal(parseCachedSnapshot(JSON.stringify(oldSnapshot), "2026-09-17"), null);
+});
 
 test("prefers Oura per metric and falls back to WHOOP recovery metrics", () => {
   const base = { memberId: "member-1", status: "complete", fetchedAt: 1 };

@@ -113,11 +113,18 @@ function mockSnapshot(): WellnessSnapshot {
   };
 }
 
-function parseCachedSnapshot(value: string, date: string): CachedSnapshot | null {
+export function parseCachedSnapshot(value: string, date: string): CachedSnapshot | null {
   try {
     const parsed = JSON.parse(value) as Partial<CachedSnapshot>;
     if (parsed.date !== date || parsed.mode !== "sites" || !parsed.ranges || !Array.isArray(parsed.rangeOptions)) return null;
-    if (!parsed.ranges.today || !parsed.ranges.last7 || !parsed.ranges.last14 || !parsed.ranges.last30) return null;
+    for (const range of ["today", "last7", "last14", "last30"] as const) {
+      const view = parsed.ranges[range];
+      if (!view || !Array.isArray(view.historyDates) || !Array.isArray(view.members)) return null;
+      if (!view.members.every((member) =>
+        (member.primaryScore === null || typeof member.primaryScore === "number") &&
+        (member.primaryScoreLabel === "readiness" || member.primaryScoreLabel === "recovery") &&
+        Array.isArray(member.scoreHistory) && member.scoreHistory.length === view.historyDates.length)) return null;
+    }
     return parsed as CachedSnapshot;
   } catch {
     return null;

@@ -6,7 +6,7 @@ import { writeBatches } from "./write-batches";
 export type DailyRecordInput = typeof dailySourceRecords.$inferInsert;
 export type SleepStageInput = typeof sleepStageSegments.$inferInsert;
 const SLEEP_STAGE_INSERT_BATCH_SIZE = 12;
-const SNAPSHOT_SCHEMA_VERSION = 1;
+const SNAPSHOT_SCHEMA_VERSION = 2;
 
 export async function readWellnessSnapshotCache(householdId: string, localDate: string, database?: Database) {
   const db = database ?? await getDb();
