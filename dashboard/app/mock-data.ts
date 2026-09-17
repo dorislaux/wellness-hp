@@ -18,6 +18,8 @@ export type Member = {
   initials: string;
   avatar: "green" | "amber" | "blue" | "plum" | "coral" | "teal";
   sources: Source[];
+  primaryScore: number | null;
+  primaryScoreLabel: "readiness" | "recovery";
   readiness: number | null;
   readinessAverage: number | null;
   recovery: number | null;
@@ -35,7 +37,7 @@ export type Member = {
   sleepEnd: string;
   contributors: Contributor[];
   stages: SleepStage[];
-  readinessHistory: Array<number | null>;
+  scoreHistory: Array<number | null>;
 };
 
 const stages: SleepStage[] = [
@@ -73,6 +75,8 @@ export const members: Member[] = [
     initials: "AL",
     avatar: "green",
     sources: ["oura", "whoop"],
+    primaryScore: 87,
+    primaryScoreLabel: "readiness",
     readiness: 87,
     readinessAverage: 82,
     recovery: 85,
@@ -90,7 +94,7 @@ export const members: Member[] = [
     sleepEnd: "6:51am",
     contributors: contributorSet(28),
     stages,
-    readinessHistory: [85, 88, 83, 69, 86, 89, 87],
+    scoreHistory: [85, 88, 83, 69, 86, 89, 87],
   },
   {
     id: "jordan",
@@ -98,6 +102,8 @@ export const members: Member[] = [
     initials: "JD",
     avatar: "amber",
     sources: ["oura"],
+    primaryScore: 61,
+    primaryScoreLabel: "readiness",
     readiness: 61,
     readinessAverage: 78,
     recovery: null,
@@ -115,7 +121,7 @@ export const members: Member[] = [
     sleepEnd: "6:12am",
     contributors: contributorSet(0),
     stages,
-    readinessHistory: [68, 49, 65, 46, 67, 75, 61],
+    scoreHistory: [68, 49, 65, 46, 67, 75, 61],
   },
   {
     id: "sam",
@@ -123,6 +129,8 @@ export const members: Member[] = [
     initials: "SM",
     avatar: "blue",
     sources: ["oura", "whoop"],
+    primaryScore: 74,
+    primaryScoreLabel: "readiness",
     readiness: 74,
     readinessAverage: 76,
     recovery: 74,
@@ -140,7 +148,7 @@ export const members: Member[] = [
     sleepEnd: "6:38am",
     contributors: contributorSet(18),
     stages,
-    readinessHistory: [78, 80, 69, 77, 81, 76, 74],
+    scoreHistory: [78, 80, 69, 77, 81, 76, 74],
   },
 ];
 

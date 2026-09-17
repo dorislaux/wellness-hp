@@ -2,7 +2,8 @@ import { decryptProviderTokens, encryptProviderTokens } from "./provider-crypto"
 import { getOuraCollection, normalizeOuraDay, refreshOuraTokens } from "./providers/oura";
 import { getWhoopCollection, normalizeWhoopDay, refreshWhoopTokens } from "./providers/whoop";
 import { readProviderCredential, replaceProviderCredential } from "../db/provider-credential-store";
-import { listHouseholdConnections, markConnectionAttempt, replaceSleepStages, upsertDailyRecords } from "../db/wellness-store";
+import { listHouseholdConnections, markConnectionAttempt, oldestIncompleteSourceDate,
+  replaceSleepStages, upsertDailyRecords } from "../db/wellness-store";
 import { enforceRetention } from "../db/retention";
 
 type Connection = Awaited<ReturnType<typeof listHouseholdConnections>>[number];
@@ -130,15 +131,23 @@ function diagnosticCode(error: unknown): string {
   return "unexpected";
 }
 
-function lookbackDays(connection: Connection, now: Date): number {
+function elapsedDays(startDate: string, endDate: string): number {
+  return Math.round((Date.parse(`${endDate}T00:00:00.000Z`) - Date.parse(`${startDate}T00:00:00.000Z`)) /
+    (24 * 60 * 60 * 1000));
+}
+
+async function lookbackDays(connection: Connection, date: string, now: Date): Promise<number> {
   if (connection.lastSuccessAt === null) return 29;
   const daysSinceSuccess = Math.ceil((now.valueOf() - connection.lastSuccessAt) / (24 * 60 * 60 * 1000));
-  return Math.min(29, Math.max(2, daysSinceSuccess + 1));
+  const normalLookback = Math.min(29, Math.max(2, daysSinceSuccess + 1));
+  const incompleteDate = await oldestIncompleteSourceDate({ memberId: connection.memberId,
+    provider: connection.provider, startDate: shiftDate(date, -14), endDate: date });
+  return incompleteDate ? Math.max(normalLookback, elapsedDays(incompleteDate, date)) : normalLookback;
 }
 
 async function syncConnection(connection: Connection, date: string, now: Date) {
   try {
-    const days = lookbackDays(connection, now);
+    const days = await lookbackDays(connection, date, now);
     if (connection.provider === "oura") await syncOura(connection, date, days);
     else await syncWhoop(connection, date, days);
     await markConnectionAttempt(connection.id, "connected", true);

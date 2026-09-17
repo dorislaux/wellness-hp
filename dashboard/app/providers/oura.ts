@@ -153,21 +153,21 @@ export function normalizeOuraDay(input: { date: string; readiness: JsonRecord[];
   const activity = input.activities?.find((item) => item.day === input.date);
   const sleep = input.sleeps.filter((item) => item.day === input.date && item.type === "long_sleep")
     .sort((a, b) => (finiteNumber(b.total_sleep_duration) ?? 0) - (finiteNumber(a.total_sleep_duration) ?? 0))[0];
-  if (!readiness || !sleep) return { status: "not_current" as const };
-  const contributors = record(readiness.contributors, "Oura readiness contributors were invalid.");
-  return { status: "complete" as const, readinessScore: finiteNumber(readiness.score),
+  if (!readiness && !sleep) return { status: "not_current" as const };
+  const contributors = readiness ? record(readiness.contributors, "Oura readiness contributors were invalid.") : {};
+  return { status: "complete" as const, readinessScore: finiteNumber(readiness?.score),
     hrvBalanceScore: finiteNumber(contributors.hrv_balance),
     restingHeartRateContributorScore: finiteNumber(contributors.resting_heart_rate),
     sleepBalanceScore: finiteNumber(contributors.sleep_balance),
     bodyTemperatureContributorScore: finiteNumber(contributors.body_temperature),
-    bodyTemperatureDeviationC: finiteNumber(readiness.temperature_deviation),
+    bodyTemperatureDeviationC: finiteNumber(readiness?.temperature_deviation),
     previousDayActivityScore: finiteNumber(contributors.previous_day_activity),
     totalCalories: finiteNumber(activity?.total_calories),
-    sleepAverageHeartRateBpm: finiteNumber(sleep.average_heart_rate), sleepAverageHrvMs: finiteNumber(sleep.average_hrv),
-    respiratoryRate: finiteNumber(sleep.average_breath),
-    sleepTotalSeconds: finiteNumber(sleep.total_sleep_duration), deepSleepSeconds: finiteNumber(sleep.deep_sleep_duration),
-    sleepStartAt: typeof sleep.bedtime_start === "string" ? Date.parse(sleep.bedtime_start) : null,
-    sleepEndAt: typeof sleep.bedtime_end === "string" ? Date.parse(sleep.bedtime_end) : null,
-    sourceUpdatedAt: typeof sleep.timestamp === "string" ? Date.parse(sleep.timestamp) : null,
-    sleepStages: decodeOuraSleepStages(sleep.sleep_phase_5_min) };
+    sleepAverageHeartRateBpm: finiteNumber(sleep?.average_heart_rate), sleepAverageHrvMs: finiteNumber(sleep?.average_hrv),
+    respiratoryRate: finiteNumber(sleep?.average_breath),
+    sleepTotalSeconds: finiteNumber(sleep?.total_sleep_duration), deepSleepSeconds: finiteNumber(sleep?.deep_sleep_duration),
+    sleepStartAt: typeof sleep?.bedtime_start === "string" ? Date.parse(sleep.bedtime_start) : null,
+    sleepEndAt: typeof sleep?.bedtime_end === "string" ? Date.parse(sleep.bedtime_end) : null,
+    sourceUpdatedAt: typeof sleep?.timestamp === "string" ? Date.parse(sleep.timestamp) : null,
+    sleepStages: decodeOuraSleepStages(sleep?.sleep_phase_5_min) };
 }

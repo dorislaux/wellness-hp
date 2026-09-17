@@ -52,3 +52,50 @@ test("derives WHOOP body-temperature deviation from the member baseline", () => 
   });
   assert.equal(view.members[0].bodyTemperatureDeviationC, 0.5);
 });
+
+test("uses WHOOP recovery for the primary card and timeline score when Oura readiness is absent", () => {
+  const view = buildRangeView({
+    range: "last7",
+    date: "2026-09-08",
+    timezone: "Asia/Shanghai",
+    connections: [
+      { id: "whoop-1", memberId: "member-1", provider: "whoop", status: "connected", grantedScopes: "", lastSuccessAt: 1 },
+    ],
+    stored: {
+      members: [{ id: "member-1", name: "Jackie", initials: "J", avatar: "green", displayOrder: 0 }],
+      stages: [],
+      records: [
+        { memberId: "member-1", provider: "whoop", status: "complete", fetchedAt: 1,
+          localDate: "2026-09-08", recoveryScore: 73 },
+      ],
+    },
+  });
+  assert.equal(view.members[0].readiness, null);
+  assert.equal(view.members[0].primaryScore, 73);
+  assert.equal(view.members[0].primaryScoreLabel, "recovery");
+  assert.equal(view.members[0].scoreHistory.at(-1), 73);
+});
+
+test("prefers Oura readiness over WHOOP recovery for the primary score", () => {
+  const base = { memberId: "member-1", status: "complete", fetchedAt: 1, localDate: "2026-09-08" };
+  const view = buildRangeView({
+    range: "today",
+    date: "2026-09-08",
+    timezone: "Asia/Shanghai",
+    connections: [
+      { id: "oura-1", memberId: "member-1", provider: "oura", status: "connected", grantedScopes: "", lastSuccessAt: 1 },
+      { id: "whoop-1", memberId: "member-1", provider: "whoop", status: "connected", grantedScopes: "", lastSuccessAt: 1 },
+    ],
+    stored: {
+      members: [{ id: "member-1", name: "Dory", initials: "D", avatar: "green", displayOrder: 0 }],
+      stages: [],
+      records: [
+        { ...base, provider: "oura", readinessScore: 81 },
+        { ...base, provider: "whoop", recoveryScore: 92 },
+      ],
+    },
+  });
+  assert.equal(view.members[0].primaryScore, 81);
+  assert.equal(view.members[0].primaryScoreLabel, "readiness");
+  assert.equal(view.members[0].scoreHistory[0], 81);
+});

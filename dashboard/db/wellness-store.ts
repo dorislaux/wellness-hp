@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { getDb, type Database } from "./index";
 import { dailySourceRecords, members, providerConnections, sleepStageSegments, wellnessSnapshotCache } from "./schema";
 import { writeBatches } from "./write-batches";
@@ -57,27 +57,48 @@ export async function upsertDailyRecords(records: DailyRecordInput[], database?:
   if (!records.length) return;
   const db = database ?? await getDb();
   for (const item of records) {
+    if (item.status !== "complete") {
+      const [existing] = await db.select({ status: dailySourceRecords.status }).from(dailySourceRecords)
+        .where(and(eq(dailySourceRecords.memberId, item.memberId), eq(dailySourceRecords.localDate, item.localDate),
+          eq(dailySourceRecords.provider, item.provider))).limit(1);
+      if (existing?.status === "complete") continue;
+    }
     await db.insert(dailySourceRecords).values(item).onConflictDoUpdate({
       target: [dailySourceRecords.memberId, dailySourceRecords.localDate, dailySourceRecords.provider],
-      set: { status: item.status, readinessScore: item.readinessScore ?? null,
-        hrvBalanceScore: item.hrvBalanceScore ?? null,
-        restingHeartRateContributorScore: item.restingHeartRateContributorScore ?? null,
-        sleepBalanceScore: item.sleepBalanceScore ?? null,
-        bodyTemperatureContributorScore: item.bodyTemperatureContributorScore ?? null,
-        bodyTemperatureDeviationC: item.bodyTemperatureDeviationC ?? null,
-        skinTemperatureC: item.skinTemperatureC ?? null,
-        previousDayActivityScore: item.previousDayActivityScore ?? null,
-        totalCalories: item.totalCalories ?? null,
-        sleepAverageHeartRateBpm: item.sleepAverageHeartRateBpm ?? null,
-        sleepAverageHrvMs: item.sleepAverageHrvMs ?? null,
-        respiratoryRate: item.respiratoryRate ?? null,
-        sleepTotalSeconds: item.sleepTotalSeconds ?? null, deepSleepSeconds: item.deepSleepSeconds ?? null,
-        sleepStartAt: item.sleepStartAt ?? null, sleepEndAt: item.sleepEndAt ?? null,
-        recoveryScore: item.recoveryScore ?? null, dayStrain: item.dayStrain ?? null,
-        sourceUpdatedAt: item.sourceUpdatedAt ?? null, fetchedAt: item.fetchedAt ?? Date.now(),
+      set: { status: item.status,
+        readinessScore: sql`coalesce(excluded.readiness_score, ${dailySourceRecords.readinessScore})`,
+        hrvBalanceScore: sql`coalesce(excluded.hrv_balance_score, ${dailySourceRecords.hrvBalanceScore})`,
+        restingHeartRateContributorScore: sql`coalesce(excluded.resting_heart_rate_contributor_score, ${dailySourceRecords.restingHeartRateContributorScore})`,
+        sleepBalanceScore: sql`coalesce(excluded.sleep_balance_score, ${dailySourceRecords.sleepBalanceScore})`,
+        bodyTemperatureContributorScore: sql`coalesce(excluded.body_temperature_contributor_score, ${dailySourceRecords.bodyTemperatureContributorScore})`,
+        bodyTemperatureDeviationC: sql`coalesce(excluded.body_temperature_deviation_c, ${dailySourceRecords.bodyTemperatureDeviationC})`,
+        skinTemperatureC: sql`coalesce(excluded.skin_temperature_c, ${dailySourceRecords.skinTemperatureC})`,
+        previousDayActivityScore: sql`coalesce(excluded.previous_day_activity_score, ${dailySourceRecords.previousDayActivityScore})`,
+        totalCalories: sql`coalesce(excluded.total_calories, ${dailySourceRecords.totalCalories})`,
+        sleepAverageHeartRateBpm: sql`coalesce(excluded.sleep_average_heart_rate_bpm, ${dailySourceRecords.sleepAverageHeartRateBpm})`,
+        sleepAverageHrvMs: sql`coalesce(excluded.sleep_average_hrv_ms, ${dailySourceRecords.sleepAverageHrvMs})`,
+        respiratoryRate: sql`coalesce(excluded.respiratory_rate, ${dailySourceRecords.respiratoryRate})`,
+        sleepTotalSeconds: sql`coalesce(excluded.sleep_total_seconds, ${dailySourceRecords.sleepTotalSeconds})`,
+        deepSleepSeconds: sql`coalesce(excluded.deep_sleep_seconds, ${dailySourceRecords.deepSleepSeconds})`,
+        sleepStartAt: sql`coalesce(excluded.sleep_start_at, ${dailySourceRecords.sleepStartAt})`,
+        sleepEndAt: sql`coalesce(excluded.sleep_end_at, ${dailySourceRecords.sleepEndAt})`,
+        recoveryScore: sql`coalesce(excluded.recovery_score, ${dailySourceRecords.recoveryScore})`,
+        dayStrain: sql`coalesce(excluded.day_strain, ${dailySourceRecords.dayStrain})`,
+        sourceUpdatedAt: sql`coalesce(excluded.source_updated_at, ${dailySourceRecords.sourceUpdatedAt})`,
+        fetchedAt: item.fetchedAt ?? Date.now(),
         sanitizedErrorCode: item.sanitizedErrorCode ?? null },
     });
   }
+}
+
+export async function oldestIncompleteSourceDate(input: { memberId: string; provider: "oura" | "whoop";
+  startDate: string; endDate: string }, database?: Database) {
+  const db = database ?? await getDb();
+  const [record] = await db.select({ localDate: dailySourceRecords.localDate }).from(dailySourceRecords)
+    .where(and(eq(dailySourceRecords.memberId, input.memberId), eq(dailySourceRecords.provider, input.provider),
+      eq(dailySourceRecords.status, "not_current"), gte(dailySourceRecords.localDate, input.startDate),
+      lte(dailySourceRecords.localDate, input.endDate))).orderBy(asc(dailySourceRecords.localDate)).limit(1);
+  return record?.localDate ?? null;
 }
 
 export async function replaceSleepStages(input: { memberId: string; localDate: string;

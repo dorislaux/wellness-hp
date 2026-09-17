@@ -64,3 +64,22 @@ test("normalizes only an exact Oura date and selects the main sleep", () => {
   assert.equal(value.sleepStages.length, 4);
   assert.deepEqual(normalizeOuraDay({ date: "2026-09-05", readiness: [], sleeps: [] }), { status: "not_current" });
 });
+
+test("keeps available Oura readiness when sleep is delayed", () => {
+  const value = normalizeOuraDay({ date: "2026-09-06", activities: [], sleeps: [], readiness: [
+    { day: "2026-09-06", score: 82, contributors: { hrv_balance: 80, resting_heart_rate: 78,
+      sleep_balance: 76, body_temperature: 90, previous_day_activity: 74 } },
+  ] });
+  assert.equal(value.status, "complete");
+  assert.equal(value.readinessScore, 82);
+  assert.equal(value.sleepTotalSeconds, null);
+});
+
+test("keeps available Oura sleep when readiness is delayed", () => {
+  const value = normalizeOuraDay({ date: "2026-09-06", activities: [], readiness: [], sleeps: [
+    { day: "2026-09-06", type: "long_sleep", total_sleep_duration: 25000, average_hrv: 45 },
+  ] });
+  assert.equal(value.status, "complete");
+  assert.equal(value.readinessScore, null);
+  assert.equal(value.sleepTotalSeconds, 25000);
+});

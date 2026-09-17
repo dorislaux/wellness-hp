@@ -339,7 +339,7 @@ function HouseholdCard({ member, issues, isToday, onOpen }: { member: Member; is
         </div>
       </div>
       <div className="card-primary">
-        <div><strong>{formatMetric(member.readiness)}</strong><span>readiness</span></div>
+        <div><strong>{formatMetric(member.primaryScore)}</strong><span>{member.primaryScoreLabel}</span></div>
       </div>
       <div className="card-stats oura-stats">
         <div><span>HRV</span><strong>{member.overnightHrv === null ? "—" : `${formatMetric(member.overnightHrv)} ms`}</strong></div>
@@ -348,7 +348,7 @@ function HouseholdCard({ member, issues, isToday, onOpen }: { member: Member; is
       </div>
       <div className="whoop-stats">
         {member.recovery === null && member.strain === null ? <p className="muted">{member.sources.includes("whoop") ? "WHOOP needs refresh" : "No WHOOP paired"}</p> : <>
-          <div><span>Recovery</span><strong>{member.recovery === null ? "—" : `${formatMetric(member.recovery)}%`}</strong></div>
+          {member.primaryScoreLabel !== "recovery" && <div><span>Recovery</span><strong>{member.recovery === null ? "—" : `${formatMetric(member.recovery)}%`}</strong></div>}
           <div><span>Strain</span><strong>{formatStrain(member.strain)}</strong></div>
         </>}
       </div>
@@ -382,7 +382,7 @@ function TimelineView({ visibleMembers, historyDates }: { visibleMembers: Member
       label: weekLabel(pageDates[0], pageDates.at(-1) ?? pageDates[0]) });
   }
   return (
-    <section className="timeline-wrap" aria-label={`${historyDates.length}-day readiness timeline`}>
+    <section className="timeline-wrap" aria-label={`${historyDates.length}-day wellness score timeline`}>
       <div className="timeline-grid timeline-desktop" style={{ gridTemplateColumns: `130px repeat(${historyDates.length}, minmax(52px, 1fr))`,
         minWidth: `${130 + historyDates.length * 66}px` }}>
         <div />
@@ -395,13 +395,13 @@ function TimelineView({ visibleMembers, historyDates }: { visibleMembers: Member
         {visibleMembers.map((member) => (
           <div className="timeline-row" key={member.id}>
             <div className="timeline-name">{member.name}</div>
-            {member.readinessHistory.map((score, index) => (
+            {member.scoreHistory.map((score, index) => (
               <div
                 key={`${member.id}-${historyDates[index]}`}
                 className={`timeline-cell ${readinessTone(score)}`}
                 role="img"
-                aria-label={`${member.name}, ${historyDates[index]}, readiness ${formatMetric(score)}`}
-                title={score === null ? "Unavailable" : `Readiness ${formatMetric(score)}`}
+                aria-label={`${member.name}, ${historyDates[index]}, wellness score ${formatMetric(score)}`}
+                title={score === null ? "Unavailable" : `Wellness score ${formatMetric(score)}`}
               >
                 <span className="sr-only">{formatMetric(score)}</span>
               </div>
@@ -424,9 +424,9 @@ function TimelineView({ visibleMembers, historyDates }: { visibleMembers: Member
                 {week.dates.map((date, index) => {
                   if (!date) return <div className="timeline-mobile-empty" key={`empty-${member.id}-${index}`} aria-hidden="true" />;
                   const historyIndex = week.startIndex + index - (7 - week.dates.filter(Boolean).length);
-                  const score = member.readinessHistory[historyIndex] ?? null;
+                  const score = member.scoreHistory[historyIndex] ?? null;
                   return <div key={`${member.id}-${date}`} className={`timeline-mobile-cell ${readinessTone(score)}`}
-                    role="img" aria-label={`${member.name}, ${date}, readiness ${formatMetric(score)}`}>
+                    role="img" aria-label={`${member.name}, ${date}, wellness score ${formatMetric(score)}`}>
                     <span>{score === null ? "—" : Math.round(score)}</span>
                   </div>;
                 })}
@@ -436,7 +436,7 @@ function TimelineView({ visibleMembers, historyDates }: { visibleMembers: Member
         </div>
         <p className="timeline-swipe-note">{weeks.length > 1 ? "Swipe for earlier weeks · " : ""}Red 0–69 · Yellow 70–84 · Green 85–100</p>
       </div>
-      <p className="timeline-note timeline-desktop-note">Cell color reflects daily Oura readiness: red 0–69, yellow 70–84, green 85–100.</p>
+      <p className="timeline-note timeline-desktop-note">Cell color reflects Oura readiness, or WHOOP recovery when readiness is unavailable: red 0–69, yellow 70–84, green 85–100.</p>
     </section>
   );
 }

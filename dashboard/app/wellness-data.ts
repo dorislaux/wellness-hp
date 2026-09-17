@@ -83,8 +83,8 @@ function contributor(label: string, score: number | null): Contributor {
 function mockMembersForDays(days: number): Member[] {
   return mockMembers.map((member) => ({
     ...member,
-    readinessHistory: Array.from({ length: days }, (_, index) =>
-      member.readinessHistory[index % member.readinessHistory.length] ?? null),
+    scoreHistory: Array.from({ length: days }, (_, index) =>
+      member.scoreHistory[index % member.scoreHistory.length] ?? null),
   }));
 }
 
@@ -96,7 +96,7 @@ function mockView(range: RangeKey): RangeView {
     historyDates: Array.from({ length: days }, (_, index) => shiftDate(MOCK_DATE, index + 1 - days)),
     emptyMessage: null,
     members: range === "today"
-      ? mockMembers.map((member) => ({ ...member, readinessHistory: [member.readiness] }))
+      ? mockMembers.map((member) => ({ ...member, scoreHistory: [member.primaryScore] }))
       : mockMembersForDays(days),
     issues: [{ memberId: "jordan", source: "whoop", code: "not_connected", message: "WHOOP is not paired for Jordan." }],
   };
@@ -172,6 +172,7 @@ export function buildRangeView(input: {
     }
 
     const readiness = average(activeOuraRecords.map((item) => item.readinessScore));
+    const recovery = average(activeWhoopRecords.map((item) => item.recoveryScore));
     const ouraHrv = average(activeOuraRecords.map((item) => item.sleepAverageHrvMs));
     const whoopHrv = average(activeWhoopRecords.map((item) => item.sleepAverageHrvMs));
     const ouraHeartRate = average(activeOuraRecords.map((item) => item.sleepAverageHeartRateBpm));
@@ -199,9 +200,11 @@ export function buildRangeView(input: {
       initials: stored.initials,
       avatar: memberAvatar(stored.avatar),
       sources,
+      primaryScore: readiness ?? recovery,
+      primaryScoreLabel: readiness !== null ? "readiness" : "recovery",
       readiness,
       readinessAverage: average(ouraRecords.filter((item) => item.status === "complete").map((item) => item.readinessScore)),
-      recovery: average(activeWhoopRecords.map((item) => item.recoveryScore)),
+      recovery,
       overnightHrv,
       hrvBaseline: average((useOuraHrv ? ouraCompleteRecords : whoopCompleteRecords).map((item) => item.sleepAverageHrvMs)),
       sleepAverageHeartRate,
@@ -232,8 +235,11 @@ export function buildRangeView(input: {
         .map((stage) => ({ stage: stage.stage === "rem" ? "REM" as const
           : `${stage.stage[0].toUpperCase()}${stage.stage.slice(1)}` as "Light" | "Deep" | "Awake",
         minutes: stage.durationSeconds / 60 })) : [],
-      readinessHistory: historyDates.map((day) =>
-        ouraRecords.find((item) => item.localDate === day && item.status === "complete")?.readinessScore ?? null),
+      scoreHistory: historyDates.map((day) => {
+        const oura = ouraRecords.find((item) => item.localDate === day && item.status === "complete")?.readinessScore ?? null;
+        const whoop = whoopRecords.find((item) => item.localDate === day && item.status === "complete")?.recoveryScore ?? null;
+        return oura ?? whoop;
+      }),
     };
   });
 
