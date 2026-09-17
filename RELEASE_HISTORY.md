@@ -22,10 +22,11 @@ This project uses `1.XX` release numbers for product releases. ChatGPT Sites als
 | `1.16` | 16 | 2026-09-08 | `75bc29d` | Added the local-time Today view, detailed Oura sleep stages, temperature and respiratory metrics, compact mobile controls, and WHOOP sleep and calorie fallback. |
 | `1.17` | 17 | 2026-09-08 | `274e701` | Added WHOOP HRV, resting-heart-rate, and temperature fallback; faster incremental provider refresh; a household-scoped first-screen snapshot cache; and the mobile household-selector fix. |
 | `1.18` | 18 | 2026-09-09 | `ed2cdec` | Hid the empty Oura readiness panel for WHOOP-only members while preserving a compact refresh notice when a connected Oura source is temporarily unavailable. |
+| `1.19` | 19 | 2026-09-17 | `447c0df` | Repaired recent incomplete Oura history without erasing complete metrics and added WHOOP recovery fallback for cards and timeline scores when Oura readiness is unavailable. |
 
 ## Numbering convention
 
-- The next release is `1.19`, corresponding to Sites version 19.
+- The next release is `1.20`, corresponding to Sites version 20.
 - Increment the final two digits for each published release: `1.16`, `1.17`, and so on.
 - Record a release here only after its Sites deployment succeeds.
 - Sites version numbers remain system-managed; this file is the canonical product-release history.
