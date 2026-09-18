@@ -12,7 +12,7 @@ import {
 } from "./mock-data";
 import type { DataIssue, RangeKey, WellnessSnapshot } from "./wellness-data";
 
-type View = "cards" | "timeline";
+type View = "cards" | "timeline" | "analysis";
 type ThemePreference = "system" | "light" | "dark";
 type Authorization = { id: string; memberId: string; provider: "oura" | "whoop";
   status: "pending" | "authorized" | "denied" | "expired" | "failed";
@@ -292,7 +292,7 @@ function SettingsPanel({ members, canManageHousehold, connectionMemberIds, house
 function SegmentedControl({ view, onChange }: { view: View; onChange: (view: View) => void }) {
   return (
     <div className="segmented" aria-label="Dashboard view">
-      {(["cards", "timeline"] as const).map((option) => (
+      {(["cards", "timeline", "analysis"] as const).map((option) => (
         <button
           className={view === option ? "active" : ""}
           key={option}
@@ -311,7 +311,7 @@ function RangeControl({ range, options, onChange }: {
   options: WellnessSnapshot["rangeOptions"];
   onChange: (range: RangeKey) => void;
 }) {
-  const compactLabels: Record<RangeKey, string> = { today: "Today", last7: "7D", last14: "14D", last30: "30D" };
+  const compactLabels: Record<RangeKey, string> = { today: "Today", last7: "7D", last14: "14D", last28: "28D" };
   return <div className="range-control" aria-label="Dashboard date range">
     {options.map((option) => <button key={option.value} className={range === option.value ? "active" : ""}
       aria-pressed={range === option.value} onClick={() => onChange(option.value)}>{compactLabels[option.value]}</button>)}
@@ -368,8 +368,14 @@ function CardsView({ visibleMembers, issues, isToday, onOpen }: { visibleMembers
   );
 }
 
-function TimelineView({ visibleMembers, historyDates }: { visibleMembers: Member[]; historyDates: string[] }) {
-  const weeks: Array<{ dates: Array<string | null>; startIndex: number; label: string }> = [];
+function householdWeekAverage(members: Member[], start: number, end: number): number | null {
+  const memberAverages = members.map((member) => metricAverage(member.scoreHistory.slice(start, end)))
+    .filter((value): value is number => value !== null);
+  return memberAverages.length ? memberAverages.reduce((sum, value) => sum + value, 0) / memberAverages.length : null;
+}
+
+function TimelineView({ visibleMembers, historyDates, scopeLabel }: { visibleMembers: Member[]; historyDates: string[]; scopeLabel: string }) {
+  const weeks: Array<{ dates: string[]; startIndex: number; label: string; average: number | null }> = [];
   const dateText = (date: string) => new Intl.DateTimeFormat("en", { month: "short", day: "numeric", timeZone: "UTC" })
     .format(new Date(`${date}T12:00:00.000Z`));
   const weekLabel = (start: string, end: string) => start.slice(0, 7) === end.slice(0, 7)
@@ -378,67 +384,128 @@ function TimelineView({ visibleMembers, historyDates }: { visibleMembers: Member
   for (let end = historyDates.length; end > 0; end -= 7) {
     const start = Math.max(0, end - 7);
     const pageDates = historyDates.slice(start, end);
-    weeks.push({ dates: [...Array<string | null>(7 - pageDates.length).fill(null), ...pageDates], startIndex: start,
-      label: weekLabel(pageDates[0], pageDates.at(-1) ?? pageDates[0]) });
+    weeks.push({ dates: pageDates, startIndex: start,
+      label: weekLabel(pageDates[0], pageDates.at(-1) ?? pageDates[0]),
+      average: householdWeekAverage(visibleMembers, start, end) });
   }
   return (
     <section className="timeline-wrap" aria-label={`${historyDates.length}-day wellness score timeline`}>
-      <div className="timeline-grid timeline-desktop" style={{ gridTemplateColumns: `130px repeat(${historyDates.length}, minmax(52px, 1fr))`,
-        minWidth: `${130 + historyDates.length * 66}px` }}>
-        <div />
-        {historyDates.map((date) => {
-          const parsed = new Date(`${date}T12:00:00.000Z`);
-          const weekday = new Intl.DateTimeFormat("en", { weekday: "short", timeZone: "UTC" }).format(parsed);
-          const compact = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", timeZone: "UTC" }).format(parsed);
-          return <div className="weekday" key={date}><span>{compact}</span><b>{weekday[0]}</b></div>;
-        })}
-        {visibleMembers.map((member) => (
-          <div className="timeline-row" key={member.id}>
-            <div className="timeline-name">{member.name}</div>
-            {member.scoreHistory.map((score, index) => (
-              <div
-                key={`${member.id}-${historyDates[index]}`}
-                className={`timeline-cell ${readinessTone(score)}`}
-                role="img"
-                aria-label={`${member.name}, ${historyDates[index]}, wellness score ${formatMetric(score)}`}
-                title={score === null ? "Unavailable" : `Wellness score ${formatMetric(score)}`}
-              >
-                <span className="sr-only">{formatMetric(score)}</span>
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
-      <div className="timeline-mobile">
-        <div className="timeline-week-strip">
-          {weeks.map((week, pageIndex) => <article className="timeline-week" key={week.label}>
-            <header><strong>{week.label}</strong><span>{pageIndex === 0 ? "Latest" : `${pageIndex + 1} of ${weeks.length}`}</span></header>
+      <div className="timeline-week-list">
+          {weeks.map((week) => <article className="timeline-week" key={week.label}>
+            <header><strong>{week.label}</strong><span>{scopeLabel} average <b>{formatMetric(week.average)}</b></span></header>
             <div className="timeline-week-grid">
               <div />
-              {week.dates.map((date, index) => date ? <div className="mobile-weekday" key={date}>
+              {week.dates.map((date) => <div className="mobile-weekday" key={date}>
                 <span>{new Intl.DateTimeFormat("en", { weekday: "narrow", timeZone: "UTC" }).format(new Date(`${date}T12:00:00.000Z`))}</span>
                 <b>{new Date(`${date}T12:00:00.000Z`).getUTCDate()}</b>
-              </div> : <div key={`empty-heading-${index}`} />)}
+              </div>)}
               {visibleMembers.map((member) => <div className="timeline-mobile-row" key={member.id}>
                 <div className="timeline-mobile-name">{member.name}</div>
                 {week.dates.map((date, index) => {
-                  if (!date) return <div className="timeline-mobile-empty" key={`empty-${member.id}-${index}`} aria-hidden="true" />;
-                  const historyIndex = week.startIndex + index - (7 - week.dates.filter(Boolean).length);
-                  const score = member.scoreHistory[historyIndex] ?? null;
+                  const score = member.scoreHistory[week.startIndex + index] ?? null;
                   return <div key={`${member.id}-${date}`} className={`timeline-mobile-cell ${readinessTone(score)}`}
                     role="img" aria-label={`${member.name}, ${date}, wellness score ${formatMetric(score)}`}>
-                    <span>{score === null ? "—" : Math.round(score)}</span>
+                    <span>{score === null ? "—" : formatMetric(score)}</span>
                   </div>;
                 })}
               </div>)}
             </div>
           </article>)}
-        </div>
-        <p className="timeline-swipe-note">{weeks.length > 1 ? "Swipe for earlier weeks · " : ""}Red 0–69 · Yellow 70–84 · Green 85–100</p>
       </div>
-      <p className="timeline-note timeline-desktop-note">Cell color reflects Oura readiness, or WHOOP recovery when readiness is unavailable: red 0–69, yellow 70–84, green 85–100.</p>
+      <p className="timeline-note">Oura readiness, or WHOOP recovery when readiness is unavailable · Red 0–69 · Yellow 70–84 · Green 85–100</p>
     </section>
   );
+}
+
+type MetricKey = keyof NonNullable<Member["metricHistory"]>;
+const ANALYSIS_METRICS: Array<{ key: MetricKey; label: string; short: string; unit: string }> = [
+  { key: "heartRate", label: "Resting heart rate", short: "RHR", unit: "bpm" },
+  { key: "hrv", label: "Heart rate variability", short: "HRV", unit: "ms" },
+  { key: "temperature", label: "Body temperature", short: "Temp", unit: "°C from baseline" },
+  { key: "sleep", label: "Sleep duration", short: "Sleep", unit: "h" },
+  { key: "activeCalories", label: "Active calories", short: "Calories", unit: "kcal" },
+];
+
+function metricValue(value: number | null, key: MetricKey) {
+  if (value === null) return "—";
+  if (key === "sleep") return `${formatMetric(value / 60)} h`;
+  if (key === "temperature") return `${value >= 0 ? "+" : ""}${formatMetric(value)} °C`;
+  return `${formatMetric(value)} ${key === "heartRate" ? "bpm" : key === "hrv" ? "ms" : "kcal"}`;
+}
+
+function metricAverage(values: Array<number | null>) {
+  const present = values.filter((value): value is number => value !== null);
+  return present.length ? present.reduce((sum, value) => sum + value, 0) / present.length : null;
+}
+
+function TrendChart({ series, dates, label, compact = false }: {
+  series: Array<{ name: string; values: Array<number | null>; color: number }>;
+  dates: string[];
+  label: string;
+  compact?: boolean;
+}) {
+  const values = series.flatMap((item) => item.values).filter((value): value is number => value !== null);
+  if (!values.length) return <p className="analysis-unavailable">No data for this period</p>;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const pad = Math.max((max - min) * 0.2, Math.abs(max) * 0.02, 0.1);
+  const low = min - pad;
+  const high = max + pad;
+  const x = (index: number) => 10 + index / Math.max(1, dates.length - 1) * 300;
+  const y = (value: number) => 100 - (value - low) / (high - low) * 80;
+  const path = (items: Array<number | null>) => items.map((value, index) =>
+    value === null ? "" : `${index === 0 || items[index - 1] === null ? "M" : "L"}${x(index).toFixed(1)} ${y(value).toFixed(1)}`).join(" ");
+  const baseline = compact ? metricAverage(series[0]?.values ?? []) : null;
+  return <svg className={`analysis-chart ${compact ? "compact" : ""}`} viewBox="0 0 320 120" role="img" aria-label={label}>
+    <path className="analysis-guide" d="M10 100H310" fill="none" />
+    {baseline !== null && <path className="analysis-baseline" d={`M10 ${y(baseline)}H310`} fill="none" />}
+    {series.map((item) => <g key={item.name}><path className={`analysis-line series-${item.color}`} d={path(item.values)} fill="none" />
+      {item.values.map((value, index) => value === null ? null : <circle key={index} className={`analysis-dot series-${item.color}`}
+        cx={x(index)} cy={y(value)} r="2.5" />)}</g>)}
+    {!compact && <><text x="10" y="117">{dates[0]?.slice(5)}</text><text x="310" y="117" textAnchor="end">{dates.at(-1)?.slice(5)}</text></>}
+  </svg>;
+}
+
+function AnalysisView({ visibleMembers, historyDates, isFamily }: { visibleMembers: Member[]; historyDates: string[]; isFamily: boolean }) {
+  const [metric, setMetric] = useState<MetricKey>("hrv");
+  if (!visibleMembers.length) return <p className="analysis-unavailable">No household members yet.</p>;
+  if (!isFamily) {
+    const member = visibleMembers[0];
+    return <section className="analysis-view" aria-label={`${member.name} health trends`}>
+      <h2>{member.name}&apos;s trends</h2>
+      <div className="analysis-metric-list">{ANALYSIS_METRICS.map((definition) => {
+        const values = member.metricHistory?.[definition.key] ?? [];
+        const average = metricAverage(values);
+        return <article className="analysis-metric" key={definition.key}>
+          <div className="analysis-metric-heading"><h3>{definition.label}</h3><strong>{metricValue(average, definition.key)}</strong></div>
+          <TrendChart compact series={[{ name: member.name, values, color: 1 }]} dates={historyDates}
+            label={`${member.name} ${definition.label} trend over ${historyDates.length} days`} />
+        </article>;
+      })}</div>
+      <p className="analysis-source-note">Oura data is preferred; WHOOP fills missing heart rate, HRV, temperature and sleep. Active calories currently require Oura.</p>
+    </section>;
+  }
+  const definition = ANALYSIS_METRICS.find((item) => item.key === metric) ?? ANALYSIS_METRICS[1];
+  return <section className="analysis-view" aria-label="Household metric comparison">
+    <div className="analysis-metric-picker" aria-label="Metric to compare">
+      {ANALYSIS_METRICS.map((item) => <button type="button" key={item.key} className={metric === item.key ? "active" : ""}
+        aria-pressed={metric === item.key} onClick={() => setMetric(item.key)}>{item.short}</button>)}
+    </div>
+    <h2>{definition.label}</h2>
+    <p className="analysis-unit">Daily values · {definition.unit}</p>
+    <div className="analysis-family-chart">
+      <TrendChart dates={historyDates} label={`${definition.label} trends for ${visibleMembers.map((member) => member.name).join(", ")}`}
+        series={visibleMembers.map((member, index) => ({ name: member.name, values: member.metricHistory?.[metric] ?? [], color: index % 4 + 1 }))} />
+    </div>
+    <div className="analysis-member-list">{visibleMembers.map((member, index) => {
+      const average = metricAverage(member.metricHistory?.[metric] ?? []);
+      return <div className="analysis-member-row" key={member.id}>
+        <span><i className={`analysis-key series-${index % 4 + 1}`} aria-hidden="true" />{member.name}</span>
+        <strong>{metricValue(average, metric)}</strong>
+      </div>;
+    })}</div>
+    <p className="analysis-source-note">Averages use available days. Oura is preferred; WHOOP fills comparable gaps. Active calories currently require Oura.</p>
+  </section>;
 }
 
 function Delta({ value, unit, inverse = false }: { value: number | null; unit: string; inverse?: boolean }) {
@@ -605,9 +672,18 @@ export function WellnessDashboard({ initialSnapshot }: { initialSnapshot: Wellne
     setSnapshot((existing) => ({ ...existing, ranges: {
       last7: { ...existing.ranges.last7, members: existing.ranges.last7.members.map((member) => member.id === updated.id ? { ...member, ...updated } : member) },
       last14: { ...existing.ranges.last14, members: existing.ranges.last14.members.map((member) => member.id === updated.id ? { ...member, ...updated } : member) },
-      last30: { ...existing.ranges.last30, members: existing.ranges.last30.members.map((member) => member.id === updated.id ? { ...member, ...updated } : member) },
+      last28: { ...existing.ranges.last28, members: existing.ranges.last28.members.map((member) => member.id === updated.id ? { ...member, ...updated } : member) },
       today: { ...existing.ranges.today, members: existing.ranges.today.members.map((member) => member.id === updated.id ? { ...member, ...updated } : member) },
     } }));
+  }
+
+  function changeView(next: View) {
+    setView(next);
+    if (next === "timeline") setRange("last7");
+    if (next === "analysis") {
+      if (range === "today") setRange("last28");
+      if (filter === "family" && members.length) setFilter(members[0].id);
+    }
   }
 
   if (selected) return <DayDetail member={selected} dateLabel={current.dateLabel} issues={current.issues} isToday={range === "today"} onBack={() => setSelectedId(null)} />;
@@ -625,12 +701,14 @@ export function WellnessDashboard({ initialSnapshot }: { initialSnapshot: Wellne
       </header>
       <div className="dashboard-controls">
         <label className="member-filter">View<select value={filter} onChange={(event) => setFilter(event.target.value)}><option value="family">Family</option>{members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
-        <RangeControl range={range} options={snapshot.rangeOptions} onChange={setRange} />
+        <RangeControl range={range} options={snapshot.rangeOptions.filter((option) => view === "cards" || option.value !== "today")} onChange={setRange} />
       </div>
-      <SegmentedControl view={view} onChange={setView} />
+      <SegmentedControl view={view} onChange={changeView} />
       {current.emptyMessage && <section className="empty-state" role="status"><h2>Data not ready</h2><p>{current.emptyMessage}</p></section>}
       {view === "cards" ? <CardsView visibleMembers={visibleMembers} issues={current.issues} isToday={range === "today"} onOpen={(member) => setSelectedId(member.id)} />
-        : <TimelineView visibleMembers={visibleMembers} historyDates={current.historyDates} />}
+        : view === "timeline" ? <TimelineView visibleMembers={visibleMembers} historyDates={current.historyDates}
+          scopeLabel={filter === "family" ? "Household" : visibleMembers[0]?.name ?? "Member"} />
+          : <AnalysisView visibleMembers={visibleMembers} historyDates={current.historyDates} isFamily={filter === "family"} />}
       {settingsOpen && <SettingsPanel members={members} canManageHousehold={snapshot.canManageHousehold}
         connectionMemberIds={snapshot.connectionMemberIds} theme={theme}
         householdAccessEnabled={snapshot.mode === "sites"}

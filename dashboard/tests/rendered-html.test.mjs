@@ -48,12 +48,13 @@ test("server-renders the dashboard for an authenticated mock user", async () => 
   assert.match(html, /Monday, August 10/);
   assert.match(html, /Last 7 days/);
   assert.match(html, /Last 14 days/);
-  assert.match(html, /Last 30 days/);
+  assert.match(html, /28D/);
   assert.match(html, /Settings/);
   assert.match(html, /Alex/);
   assert.match(html, /Jordan/);
   assert.match(html, /Sam/);
   assert.match(html, /Timeline/);
+  assert.match(html, /Analysis/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton/i);
 });
 
@@ -110,12 +111,12 @@ test("protects wellness data and disables caching", async () => {
   const snapshot = await allowed.json();
   assert.equal(snapshot.mode, "mock");
   assert.equal(snapshot.date, "2026-08-10");
-  assert.deepEqual(snapshot.rangeOptions.map((option) => option.value), ["today", "last7", "last14", "last30"]);
+  assert.deepEqual(snapshot.rangeOptions.map((option) => option.value), ["today", "last7", "last14", "last28"]);
   assert.equal(snapshot.ranges.today.title, "Today");
   assert.equal(snapshot.ranges.today.historyDates.length, 1);
   assert.equal(snapshot.ranges.last7.title, "7-day average");
   assert.equal(snapshot.ranges.last7.historyDates.length, 7);
   assert.equal(snapshot.ranges.last14.historyDates.length, 14);
-  assert.equal(snapshot.ranges.last30.historyDates.length, 30);
+  assert.equal(snapshot.ranges.last28.historyDates.length, 28);
   assert.deepEqual(snapshot.ranges.last7.members.map((member) => member.id), ["alex", "jordan", "sam"]);
 });

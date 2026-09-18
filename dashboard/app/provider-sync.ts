@@ -2,7 +2,7 @@ import { decryptProviderTokens, encryptProviderTokens } from "./provider-crypto"
 import { getOuraCollection, normalizeOuraDay, refreshOuraTokens } from "./providers/oura";
 import { getWhoopCollection, normalizeWhoopDay, refreshWhoopTokens } from "./providers/whoop";
 import { readProviderCredential, replaceProviderCredential } from "../db/provider-credential-store";
-import { listHouseholdConnections, markConnectionAttempt, oldestIncompleteSourceDate,
+import { listHouseholdConnections, markConnectionAttempt, oldestIncompleteSourceDate, oldestMissingActiveCaloriesDate,
   replaceSleepStages, upsertDailyRecords } from "../db/wellness-store";
 import { enforceRetention } from "../db/retention";
 
@@ -67,6 +67,7 @@ async function syncOura(connection: Connection, date: string, lookbackDays: numb
       bodyTemperatureDeviationC: normalized.bodyTemperatureDeviationC,
       previousDayActivityScore: normalized.previousDayActivityScore,
       totalCalories: normalized.totalCalories,
+      activeCalories: normalized.activeCalories,
       sleepAverageHeartRateBpm: normalized.sleepAverageHeartRateBpm,
       sleepAverageHrvMs: normalized.sleepAverageHrvMs,
       respiratoryRate: normalized.respiratoryRate,
@@ -142,7 +143,10 @@ async function lookbackDays(connection: Connection, date: string, now: Date): Pr
   const normalLookback = Math.min(29, Math.max(2, daysSinceSuccess + 1));
   const incompleteDate = await oldestIncompleteSourceDate({ memberId: connection.memberId,
     provider: connection.provider, startDate: shiftDate(date, -14), endDate: date });
-  return incompleteDate ? Math.max(normalLookback, elapsedDays(incompleteDate, date)) : normalLookback;
+  const missingActiveDate = connection.provider === "oura"
+    ? await oldestMissingActiveCaloriesDate(connection.memberId, shiftDate(date, -27), date) : null;
+  return Math.max(normalLookback, incompleteDate ? elapsedDays(incompleteDate, date) : 0,
+    missingActiveDate ? elapsedDays(missingActiveDate, date) : 0);
 }
 
 async function syncConnection(connection: Connection, date: string, now: Date) {

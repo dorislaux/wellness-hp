@@ -163,6 +163,7 @@ export function normalizeOuraDay(input: { date: string; readiness: JsonRecord[];
     bodyTemperatureDeviationC: finiteNumber(readiness?.temperature_deviation),
     previousDayActivityScore: finiteNumber(contributors.previous_day_activity),
     totalCalories: finiteNumber(activity?.total_calories),
+    activeCalories: finiteNumber(activity?.active_calories),
     sleepAverageHeartRateBpm: finiteNumber(sleep?.average_heart_rate), sleepAverageHrvMs: finiteNumber(sleep?.average_hrv),
     respiratoryRate: finiteNumber(sleep?.average_breath),
     sleepTotalSeconds: finiteNumber(sleep?.total_sleep_duration), deepSleepSeconds: finiteNumber(sleep?.deep_sleep_duration),

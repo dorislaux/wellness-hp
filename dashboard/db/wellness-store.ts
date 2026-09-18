@@ -6,7 +6,7 @@ import { writeBatches } from "./write-batches";
 export type DailyRecordInput = typeof dailySourceRecords.$inferInsert;
 export type SleepStageInput = typeof sleepStageSegments.$inferInsert;
 const SLEEP_STAGE_INSERT_BATCH_SIZE = 12;
-const SNAPSHOT_SCHEMA_VERSION = 2;
+const SNAPSHOT_SCHEMA_VERSION = 3;
 
 export async function readWellnessSnapshotCache(householdId: string, localDate: string, database?: Database) {
   const db = database ?? await getDb();
@@ -75,6 +75,7 @@ export async function upsertDailyRecords(records: DailyRecordInput[], database?:
         skinTemperatureC: sql`coalesce(excluded.skin_temperature_c, ${dailySourceRecords.skinTemperatureC})`,
         previousDayActivityScore: sql`coalesce(excluded.previous_day_activity_score, ${dailySourceRecords.previousDayActivityScore})`,
         totalCalories: sql`coalesce(excluded.total_calories, ${dailySourceRecords.totalCalories})`,
+        activeCalories: sql`coalesce(excluded.active_calories, ${dailySourceRecords.activeCalories})`,
         sleepAverageHeartRateBpm: sql`coalesce(excluded.sleep_average_heart_rate_bpm, ${dailySourceRecords.sleepAverageHeartRateBpm})`,
         sleepAverageHrvMs: sql`coalesce(excluded.sleep_average_hrv_ms, ${dailySourceRecords.sleepAverageHrvMs})`,
         respiratoryRate: sql`coalesce(excluded.respiratory_rate, ${dailySourceRecords.respiratoryRate})`,
@@ -98,6 +99,17 @@ export async function oldestIncompleteSourceDate(input: { memberId: string; prov
     .where(and(eq(dailySourceRecords.memberId, input.memberId), eq(dailySourceRecords.provider, input.provider),
       eq(dailySourceRecords.status, "not_current"), gte(dailySourceRecords.localDate, input.startDate),
       lte(dailySourceRecords.localDate, input.endDate))).orderBy(asc(dailySourceRecords.localDate)).limit(1);
+  return record?.localDate ?? null;
+}
+
+export async function oldestMissingActiveCaloriesDate(memberId: string, startDate: string, endDate: string,
+  database?: Database) {
+  const db = database ?? await getDb();
+  const [record] = await db.select({ localDate: dailySourceRecords.localDate }).from(dailySourceRecords)
+    .where(and(eq(dailySourceRecords.memberId, memberId), eq(dailySourceRecords.provider, "oura"),
+      eq(dailySourceRecords.status, "complete"), sql`${dailySourceRecords.activeCalories} IS NULL`,
+      sql`${dailySourceRecords.totalCalories} IS NOT NULL`, gte(dailySourceRecords.localDate, startDate),
+      lte(dailySourceRecords.localDate, endDate))).orderBy(asc(dailySourceRecords.localDate)).limit(1);
   return record?.localDate ?? null;
 }
 

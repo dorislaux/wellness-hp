@@ -201,6 +201,7 @@ export const dailySourceRecords = sqliteTable(
     skinTemperatureC: real("skin_temperature_c"),
     previousDayActivityScore: integer("previous_day_activity_score"),
     totalCalories: integer("total_calories"),
+    activeCalories: integer("active_calories"),
     sleepAverageHeartRateBpm: real("sleep_average_heart_rate_bpm"),
     sleepAverageHrvMs: real("sleep_average_hrv_ms"),
     respiratoryRate: real("respiratory_rate"),

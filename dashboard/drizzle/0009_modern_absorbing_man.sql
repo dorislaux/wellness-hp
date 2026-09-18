@@ -1,0 +1,1 @@
+ALTER TABLE `daily_source_records` ADD `active_calories` integer;

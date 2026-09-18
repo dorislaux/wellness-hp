@@ -12,7 +12,7 @@ export type DataIssue = {
   message: string;
 };
 
-export type RangeKey = "today" | "last7" | "last14" | "last30";
+export type RangeKey = "today" | "last7" | "last14" | "last28";
 
 export type RangeView = {
   title: string;
@@ -39,7 +39,7 @@ export const RANGE_OPTIONS: WellnessSnapshot["rangeOptions"] = [
   { value: "today", label: "Today" },
   { value: "last7", label: "Last 7 days" },
   { value: "last14", label: "Last 14 days" },
-  { value: "last30", label: "Last 30 days" },
+  { value: "last28", label: "Last 28 days" },
 ];
 
 function shiftDate(date: string, days: number): string {
@@ -49,7 +49,7 @@ function shiftDate(date: string, days: number): string {
 }
 
 function daysForRange(range: RangeKey): number {
-  return range === "today" ? 1 : range === "last7" ? 7 : range === "last14" ? 14 : 30;
+  return range === "today" ? 1 : range === "last7" ? 7 : range === "last14" ? 14 : 28;
 }
 
 function periodLabel(currentDate: string, days: number): string {
@@ -85,6 +85,13 @@ function mockMembersForDays(days: number): Member[] {
     ...member,
     scoreHistory: Array.from({ length: days }, (_, index) =>
       member.scoreHistory[index % member.scoreHistory.length] ?? null),
+    metricHistory: {
+      heartRate: Array.from({ length: days }, (_, index) => member.sleepAverageHeartRate === null ? null : member.sleepAverageHeartRate + (index % 5 - 2)),
+      hrv: Array.from({ length: days }, (_, index) => member.overnightHrv === null ? null : member.overnightHrv + (index % 7 - 3) * 2),
+      temperature: Array.from({ length: days }, (_, index) => member.bodyTemperatureDeviationC === null ? null : member.bodyTemperatureDeviationC + (index % 5 - 2) * 0.1),
+      sleep: Array.from({ length: days }, (_, index) => member.sleepMinutes === null ? null : member.sleepMinutes + (index % 5 - 2) * 18),
+      activeCalories: Array.from({ length: days }, (_, index) => member.sources.includes("oura") ? 300 + index % 5 * 50 : null),
+    },
   }));
 }
 
@@ -96,7 +103,7 @@ function mockView(range: RangeKey): RangeView {
     historyDates: Array.from({ length: days }, (_, index) => shiftDate(MOCK_DATE, index + 1 - days)),
     emptyMessage: null,
     members: range === "today"
-      ? mockMembers.map((member) => ({ ...member, scoreHistory: [member.primaryScore] }))
+      ? mockMembersForDays(1).map((member) => ({ ...member, scoreHistory: [member.primaryScore] }))
       : mockMembersForDays(days),
     issues: [{ memberId: "jordan", source: "whoop", code: "not_connected", message: "WHOOP is not paired for Jordan." }],
   };
@@ -109,7 +116,7 @@ function mockSnapshot(): WellnessSnapshot {
     canManageHousehold: true,
     connectionMemberIds: mockMembers.map((member) => member.id),
     rangeOptions: RANGE_OPTIONS,
-    ranges: { today: mockView("today"), last7: mockView("last7"), last14: mockView("last14"), last30: mockView("last30") },
+    ranges: { today: mockView("today"), last7: mockView("last7"), last14: mockView("last14"), last28: mockView("last28") },
   };
 }
 
@@ -117,13 +124,16 @@ export function parseCachedSnapshot(value: string, date: string): CachedSnapshot
   try {
     const parsed = JSON.parse(value) as Partial<CachedSnapshot>;
     if (parsed.date !== date || parsed.mode !== "sites" || !parsed.ranges || !Array.isArray(parsed.rangeOptions)) return null;
-    for (const range of ["today", "last7", "last14", "last30"] as const) {
+    for (const range of ["today", "last7", "last14", "last28"] as const) {
       const view = parsed.ranges[range];
-      if (!view || !Array.isArray(view.historyDates) || !Array.isArray(view.members)) return null;
+      if (!view || !Array.isArray(view.historyDates) || view.historyDates.length !== daysForRange(range) || !Array.isArray(view.members)) return null;
       if (!view.members.every((member) =>
         (member.primaryScore === null || typeof member.primaryScore === "number") &&
         (member.primaryScoreLabel === "readiness" || member.primaryScoreLabel === "recovery") &&
-        Array.isArray(member.scoreHistory) && member.scoreHistory.length === view.historyDates.length)) return null;
+        Array.isArray(member.scoreHistory) && member.scoreHistory.length === view.historyDates.length &&
+        member.metricHistory && ["heartRate", "hrv", "temperature", "sleep", "activeCalories"].every((metric) =>
+          Array.isArray(member.metricHistory?.[metric as keyof NonNullable<Member["metricHistory"]>]) &&
+          member.metricHistory[metric as keyof NonNullable<Member["metricHistory"]>].length === view.historyDates.length))) return null;
     }
     return parsed as CachedSnapshot;
   } catch {
@@ -188,6 +198,11 @@ export function buildRangeView(input: {
     const whoopSkinTemperature = average(activeWhoopRecords.map((item) => item.skinTemperatureC));
     const ouraCompleteRecords = ouraRecords.filter((item) => item.status === "complete");
     const whoopCompleteRecords = whoopRecords.filter((item) => item.status === "complete");
+    const completeOuraByDay = new Map(activeOuraRecords.map((item) => [item.localDate, item]));
+    const completeWhoopByDay = new Map(activeWhoopRecords.map((item) => [item.localDate, item]));
+    const dailyMetric = (day: string, field: "sleepAverageHeartRateBpm" | "sleepAverageHrvMs" | "sleepTotalSeconds") =>
+      completeOuraByDay.get(day)?.[field] ?? completeWhoopByDay.get(day)?.[field] ?? null;
+    const whoopTemperatureBaseline = average(whoopCompleteRecords.map((item) => item.skinTemperatureC));
     const useOuraHrv = ouraHrv !== null;
     const useOuraHeartRate = ouraHeartRate !== null;
     const overnightHrv = ouraHrv ?? whoopHrv;
@@ -217,8 +232,7 @@ export function buildRangeView(input: {
       sleepAverageHeartRate,
       heartRateBaseline: average((useOuraHeartRate ? ouraCompleteRecords : whoopCompleteRecords)
         .map((item) => item.sleepAverageHeartRateBpm)),
-      bodyTemperatureDeviationC: ouraTemperatureDeviation ?? difference(whoopSkinTemperature,
-        average(whoopCompleteRecords.map((item) => item.skinTemperatureC))),
+      bodyTemperatureDeviationC: ouraTemperatureDeviation ?? difference(whoopSkinTemperature, whoopTemperatureBaseline),
       respiratoryRate: ouraRespiratoryRate ?? average(activeWhoopRecords.map((item) => item.respiratoryRate)),
       sleepMinutes: ouraSleepMinutes ?? average(activeWhoopRecords.map((item) => item.sleepTotalSeconds === null ? null : item.sleepTotalSeconds / 60)),
       deepSleepMinutes: ouraDeepSleepMinutes ?? average(activeWhoopRecords.map((item) => item.deepSleepSeconds === null ? null : item.deepSleepSeconds / 60)),
@@ -247,6 +261,17 @@ export function buildRangeView(input: {
         const whoop = whoopRecords.find((item) => item.localDate === day && item.status === "complete")?.recoveryScore ?? null;
         return oura ?? whoop;
       }),
+      metricHistory: {
+        heartRate: historyDates.map((day) => dailyMetric(day, "sleepAverageHeartRateBpm")),
+        hrv: historyDates.map((day) => dailyMetric(day, "sleepAverageHrvMs")),
+        temperature: historyDates.map((day) => completeOuraByDay.get(day)?.bodyTemperatureDeviationC ??
+          difference(completeWhoopByDay.get(day)?.skinTemperatureC ?? null, whoopTemperatureBaseline)),
+        sleep: historyDates.map((day) => {
+          const seconds = dailyMetric(day, "sleepTotalSeconds");
+          return seconds === null ? null : Math.round(seconds / 60 * 10) / 10;
+        }),
+        activeCalories: historyDates.map((day) => completeOuraByDay.get(day)?.activeCalories ?? null),
+      },
     };
   });
 
@@ -295,7 +320,7 @@ async function sitesSnapshot(user: ChatGPTUser, refresh: boolean): Promise<Welln
       today: buildRangeView({ range: "today", date, stored, connections, timezone: household.timezone }),
       last7: buildRangeView({ range: "last7", date, stored, connections, timezone: household.timezone }),
       last14: buildRangeView({ range: "last14", date, stored, connections, timezone: household.timezone }),
-      last30: buildRangeView({ range: "last30", date, stored, connections, timezone: household.timezone }),
+      last28: buildRangeView({ range: "last28", date, stored, connections, timezone: household.timezone }),
     },
   };
   const cached: CachedSnapshot = { date: snapshot.date, mode: snapshot.mode,

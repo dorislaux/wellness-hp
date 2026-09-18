@@ -47,7 +47,7 @@ test("requests Oura daily activity with an inclusive dashboard end date", async 
 
 test("normalizes only an exact Oura date and selects the main sleep", () => {
   const value = normalizeOuraDay({ date: "2026-09-04",
-    activities: [{ day: "2026-09-04", total_calories: 2340 }],
+    activities: [{ day: "2026-09-04", total_calories: 2340, active_calories: 410 }],
     readiness: [{ day: "2026-09-04", score: 81, temperature_deviation: 0.2, contributors: { hrv_balance: 80,
       resting_heart_rate: 75, sleep_balance: 65, body_temperature: 90, previous_day_activity: 70 } }],
     sleeps: [{ day: "2026-09-04", type: "rest", total_sleep_duration: 800 },
@@ -61,6 +61,7 @@ test("normalizes only an exact Oura date and selects the main sleep", () => {
   assert.equal(value.bodyTemperatureDeviationC, 0.2);
   assert.equal(value.respiratoryRate, 15.2);
   assert.equal(value.totalCalories, 2340);
+  assert.equal(value.activeCalories, 410);
   assert.equal(value.sleepStages.length, 4);
   assert.deepEqual(normalizeOuraDay({ date: "2026-09-05", readiness: [], sleeps: [] }), { status: "not_current" });
 });

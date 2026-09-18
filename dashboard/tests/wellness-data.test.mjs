@@ -9,6 +9,14 @@ test("rejects snapshots saved before the primary score and timeline fallback wer
   assert.equal(parseCachedSnapshot(JSON.stringify(oldSnapshot), "2026-09-17"), null);
 });
 
+test("rejects cached snapshots without the analysis series or the 28-day range", () => {
+  const oldMember = { primaryScore: 80, primaryScoreLabel: "readiness", scoreHistory: [80] };
+  const oldView = { historyDates: ["2026-09-17"], members: [oldMember] };
+  const oldSnapshot = { date: "2026-09-17", mode: "sites", rangeOptions: [],
+    ranges: { today: oldView, last7: oldView, last14: oldView, last30: oldView } };
+  assert.equal(parseCachedSnapshot(JSON.stringify(oldSnapshot), "2026-09-17"), null);
+});
+
 test("prefers Oura per metric and falls back to WHOOP recovery metrics", () => {
   const base = { memberId: "member-1", status: "complete", fetchedAt: 1 };
   const view = buildRangeView({
@@ -37,6 +45,27 @@ test("prefers Oura per metric and falls back to WHOOP recovery metrics", () => {
   assert.equal(member.sleepAverageHeartRate, 55);
   assert.equal(member.heartRateBaseline, 55.5);
   assert.equal(member.bodyTemperatureDeviationC, 0.2);
+  assert.equal(member.metricHistory.hrv[0], 44);
+  assert.equal(member.metricHistory.heartRate[0], 55);
+});
+
+test("uses Oura active calories without substituting WHOOP total energy", () => {
+  const view = buildRangeView({
+    range: "last7", date: "2026-09-08", timezone: "UTC",
+    connections: [
+      { id: "oura-1", memberId: "one", provider: "oura", status: "connected", grantedScopes: "", lastSuccessAt: 1 },
+      { id: "whoop-1", memberId: "two", provider: "whoop", status: "connected", grantedScopes: "", lastSuccessAt: 1 },
+    ],
+    stored: { members: [
+      { id: "one", name: "One", initials: "O", avatar: "blue", displayOrder: 0 },
+      { id: "two", name: "Two", initials: "T", avatar: "amber", displayOrder: 1 },
+    ], stages: [], records: [
+      { memberId: "one", provider: "oura", localDate: "2026-09-08", status: "complete", fetchedAt: 1, activeCalories: 420, totalCalories: 2200 },
+      { memberId: "two", provider: "whoop", localDate: "2026-09-08", status: "complete", fetchedAt: 1, totalCalories: 2100 },
+    ] },
+  });
+  assert.equal(view.members[0].metricHistory.activeCalories.at(-1), 420);
+  assert.equal(view.members[1].metricHistory.activeCalories.at(-1), null);
 });
 
 test("derives WHOOP body-temperature deviation from the member baseline", () => {

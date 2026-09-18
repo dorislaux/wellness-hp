@@ -38,6 +38,13 @@ export type Member = {
   contributors: Contributor[];
   stages: SleepStage[];
   scoreHistory: Array<number | null>;
+  metricHistory?: {
+    heartRate: Array<number | null>;
+    hrv: Array<number | null>;
+    temperature: Array<number | null>;
+    sleep: Array<number | null>;
+    activeCalories: Array<number | null>;
+  };
 };
 
 const stages: SleepStage[] = [

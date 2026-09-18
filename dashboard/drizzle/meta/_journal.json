@@ -64,6 +64,13 @@
       "when": 1788867105358,
       "tag": "0008_cold_salo",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1789693465627,
+      "tag": "0009_modern_absorbing_man",
+      "breakpoints": true
     }
   ]
 }
