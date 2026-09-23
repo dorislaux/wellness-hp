@@ -6,7 +6,8 @@ import { writeBatches } from "./write-batches";
 export type DailyRecordInput = typeof dailySourceRecords.$inferInsert;
 export type SleepStageInput = typeof sleepStageSegments.$inferInsert;
 const SLEEP_STAGE_INSERT_BATCH_SIZE = 12;
-const SNAPSHOT_SCHEMA_VERSION = 3;
+const SNAPSHOT_SCHEMA_VERSION = 4;
+export const OURA_ACTIVE_CALORIE_BACKFILL_MARKER = "oura_active_calories_v1";
 
 export async function readWellnessSnapshotCache(householdId: string, localDate: string, database?: Database) {
   const db = database ?? await getDb();
@@ -32,6 +33,11 @@ export async function replaceWellnessSnapshotCache(input: {
       snapshotJson: input.snapshotJson,
       generatedAt,
     } });
+}
+
+export async function invalidateWellnessSnapshotCache(householdId: string, database?: Database) {
+  const db = database ?? await getDb();
+  await db.delete(wellnessSnapshotCache).where(eq(wellnessSnapshotCache.householdId, householdId));
 }
 
 export async function listHouseholdConnections(householdId: string, database?: Database) {
@@ -111,6 +117,48 @@ export async function oldestMissingActiveCaloriesDate(memberId: string, startDat
       sql`${dailySourceRecords.totalCalories} IS NOT NULL`, gte(dailySourceRecords.localDate, startDate),
       lte(dailySourceRecords.localDate, endDate))).orderBy(asc(dailySourceRecords.localDate)).limit(1);
   return record?.localDate ?? null;
+}
+
+function shiftDate(date: string, days: number): string {
+  const value = new Date(`${date}T00:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+export async function nextOuraActiveCaloriesBackfillDate(memberId: string, startDate: string, endDate: string,
+  database?: Database) {
+  const db = database ?? await getDb();
+  const records = await db.select({ localDate: dailySourceRecords.localDate, status: dailySourceRecords.status,
+    activeCalories: dailySourceRecords.activeCalories, sanitizedErrorCode: dailySourceRecords.sanitizedErrorCode })
+    .from(dailySourceRecords).where(and(eq(dailySourceRecords.memberId, memberId),
+      eq(dailySourceRecords.provider, "oura"), gte(dailySourceRecords.localDate, startDate),
+      lte(dailySourceRecords.localDate, endDate)));
+  const byDate = new Map(records.map((record) => [record.localDate, record]));
+  for (let cursor = startDate; cursor <= endDate; cursor = shiftDate(cursor, 1)) {
+    const record = byDate.get(cursor);
+    if (!record) return cursor;
+    if (record.activeCalories === null && record.sanitizedErrorCode !== OURA_ACTIVE_CALORIE_BACKFILL_MARKER) return cursor;
+  }
+  return null;
+}
+
+export async function storeOuraActiveCaloriesBackfill(input: { memberId: string; startDate: string; endDate: string;
+  values: Map<string, number> }, database?: Database) {
+  const db = database ?? await getDb();
+  const fetchedAt = Date.now();
+  for (let cursor = input.startDate; cursor <= input.endDate; cursor = shiftDate(cursor, 1)) {
+    const activeCalories = input.values.get(cursor) ?? null;
+    await db.insert(dailySourceRecords).values({ memberId: input.memberId, localDate: cursor, provider: "oura",
+      status: activeCalories === null ? "not_current" : "complete", activeCalories, fetchedAt,
+      sanitizedErrorCode: activeCalories === null ? OURA_ACTIVE_CALORIE_BACKFILL_MARKER : null })
+      .onConflictDoUpdate({ target: [dailySourceRecords.memberId, dailySourceRecords.localDate, dailySourceRecords.provider],
+        set: {
+          status: sql`case when excluded.active_calories is not null then 'complete' else ${dailySourceRecords.status} end`,
+          activeCalories: sql`coalesce(${dailySourceRecords.activeCalories}, excluded.active_calories)`,
+          fetchedAt,
+          sanitizedErrorCode: activeCalories === null ? OURA_ACTIVE_CALORIE_BACKFILL_MARKER : null,
+        } });
+  }
 }
 
 export async function replaceSleepStages(input: { memberId: string; localDate: string;

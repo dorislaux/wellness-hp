@@ -3,7 +3,8 @@ import test from "node:test";
 
 import { writeBatches } from "../db/write-batches.ts";
 import { createHouseholdForUser } from "../db/household-store.ts";
-import { oldestIncompleteSourceDate, readWellnessSnapshotCache, replaceWellnessSnapshotCache,
+import { invalidateWellnessSnapshotCache, nextOuraActiveCaloriesBackfillDate, oldestIncompleteSourceDate,
+  readWellnessSnapshotCache, replaceWellnessSnapshotCache, storeOuraActiveCaloriesBackfill,
   upsertDailyRecords } from "../db/wellness-store.ts";
 import { createTestDatabase } from "./d1-test-helper.mjs";
 
@@ -85,6 +86,48 @@ test("finds the oldest recent source date that needs retrying", async () => {
     ], db);
     assert.equal(await oldestIncompleteSourceDate({ memberId, provider: "oura", startDate: "2026-09-01",
       endDate: "2026-09-10" }, db), "2026-09-06");
+  } finally {
+    sqlite.close();
+  }
+});
+
+test("backfills only missing Oura active calories and is safe to rerun", async () => {
+  const { db, sqlite } = createTestDatabase();
+  try {
+    await createHouseholdForUser({ userId: "owner", email: "owner@example.test", displayName: "Owner", fullName: "Owner" },
+      { name: "Household", timezone: "UTC" }, db);
+    const memberId = sqlite.prepare("SELECT id FROM members LIMIT 1").get().id;
+    await upsertDailyRecords([{ memberId, provider: "oura", localDate: "2026-09-06", status: "complete",
+      readinessScore: 82, totalCalories: 2200, fetchedAt: 1 }], db);
+    assert.equal(await nextOuraActiveCaloriesBackfillDate(memberId, "2026-09-06", "2026-09-06", db), "2026-09-06");
+    await storeOuraActiveCaloriesBackfill({ memberId, startDate: "2026-09-06", endDate: "2026-09-06",
+      values: new Map([["2026-09-06", 410]]) }, db);
+    await storeOuraActiveCaloriesBackfill({ memberId, startDate: "2026-09-06", endDate: "2026-09-06",
+      values: new Map([["2026-09-06", 999]]) }, db);
+    const record = sqlite.prepare("SELECT status, readiness_score, total_calories, active_calories FROM daily_source_records").get();
+    assert.equal(record.status, "complete");
+    assert.equal(record.readiness_score, 82);
+    assert.equal(record.total_calories, 2200);
+    assert.equal(record.active_calories, 410);
+    assert.equal(await nextOuraActiveCaloriesBackfillDate(memberId, "2026-09-06", "2026-09-06", db), null);
+  } finally {
+    sqlite.close();
+  }
+});
+
+test("marks empty Oura backfill dates as checked and invalidates snapshots", async () => {
+  const { db, sqlite } = createTestDatabase();
+  try {
+    const household = await createHouseholdForUser({ userId: "owner", email: "owner@example.test",
+      displayName: "Owner", fullName: "Owner" }, { name: "Household", timezone: "UTC" }, db);
+    const memberId = sqlite.prepare("SELECT id FROM members LIMIT 1").get().id;
+    await replaceWellnessSnapshotCache({ householdId: household.householdId, localDate: "2026-09-06",
+      snapshotJson: "{}" }, db);
+    await storeOuraActiveCaloriesBackfill({ memberId, startDate: "2026-09-06", endDate: "2026-09-06",
+      values: new Map() }, db);
+    assert.equal(await nextOuraActiveCaloriesBackfillDate(memberId, "2026-09-06", "2026-09-06", db), null);
+    await invalidateWellnessSnapshotCache(household.householdId, db);
+    assert.equal(await readWellnessSnapshotCache(household.householdId, "2026-09-06", db), null);
   } finally {
     sqlite.close();
   }

@@ -8,6 +8,7 @@ import {
   formatMetric,
   formatStrain,
   readinessTone,
+  timelineTone,
   type Member,
 } from "./mock-data";
 import type { DataIssue, RangeKey, WellnessSnapshot } from "./wellness-data";
@@ -403,8 +404,10 @@ function TimelineView({ visibleMembers, historyDates, scopeLabel }: { visibleMem
                 <div className="timeline-mobile-name">{member.name}</div>
                 {week.dates.map((date, index) => {
                   const score = member.scoreHistory[week.startIndex + index] ?? null;
-                  return <div key={`${member.id}-${date}`} className={`timeline-mobile-cell ${readinessTone(score)}`}
-                    role="img" aria-label={`${member.name}, ${date}, wellness score ${formatMetric(score)}`}>
+                  const source = member.scoreSourceHistory[week.startIndex + index] ?? null;
+                  const scoreName = source === "whoop" ? "WHOOP recovery" : "Oura readiness";
+                  return <div key={`${member.id}-${date}`} className={`timeline-mobile-cell ${timelineTone(score, source)}`}
+                    role="img" aria-label={`${member.name}, ${date}, ${scoreName} ${formatMetric(score)}`}>
                     <span>{score === null ? "—" : formatMetric(score)}</span>
                   </div>;
                 })}
@@ -412,7 +415,7 @@ function TimelineView({ visibleMembers, historyDates, scopeLabel }: { visibleMem
             </div>
           </article>)}
       </div>
-      <p className="timeline-note">Oura readiness, or WHOOP recovery when readiness is unavailable · Red 0–69 · Yellow 70–84 · Green 85–100</p>
+      <p className="timeline-note">Colors follow each score’s device: Oura readiness uses Oura zones; WHOOP recovery uses WHOOP zones.</p>
     </section>
   );
 }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { formatCalories, formatDuration, formatMetric, formatStrain, readinessTone } from "../app/mock-data.ts";
+import { formatCalories, formatDuration, formatMetric, formatStrain, readinessTone, timelineTone } from "../app/mock-data.ts";
 
 test("formats strain with exactly one digit after the decimal", () => {
   assert.equal(formatStrain(8.848939), "8.8");
@@ -27,4 +27,16 @@ test("uses the configured readiness timeline thresholds", () => {
   assert.equal(readinessTone(85), "good");
   assert.equal(readinessTone(100), "good");
   assert.equal(readinessTone(null), "missing");
+});
+
+test("uses source-specific timeline thresholds at every boundary", () => {
+  assert.equal(timelineTone(33, "whoop"), "whoop-low");
+  assert.equal(timelineTone(34, "whoop"), "whoop-fair");
+  assert.equal(timelineTone(66, "whoop"), "whoop-fair");
+  assert.equal(timelineTone(67, "whoop"), "whoop-good");
+  assert.equal(timelineTone(69, "oura"), "low");
+  assert.equal(timelineTone(70, "oura"), "fair");
+  assert.equal(timelineTone(84, "oura"), "fair");
+  assert.equal(timelineTone(85, "oura"), "good");
+  assert.equal(timelineTone(null, "whoop"), "missing");
 });

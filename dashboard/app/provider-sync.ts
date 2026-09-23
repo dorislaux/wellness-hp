@@ -1,12 +1,15 @@
 import { decryptProviderTokens, encryptProviderTokens } from "./provider-crypto";
-import { getOuraCollection, normalizeOuraDay, refreshOuraTokens } from "./providers/oura";
+import { activeCaloriesByDay, getOuraCollection, normalizeOuraDay, refreshOuraTokens } from "./providers/oura";
 import { getWhoopCollection, normalizeWhoopDay, refreshWhoopTokens } from "./providers/whoop";
 import { readProviderCredential, replaceProviderCredential } from "../db/provider-credential-store";
-import { listHouseholdConnections, markConnectionAttempt, oldestIncompleteSourceDate, oldestMissingActiveCaloriesDate,
-  replaceSleepStages, upsertDailyRecords } from "../db/wellness-store";
+import { invalidateWellnessSnapshotCache, listHouseholdConnections, markConnectionAttempt, nextOuraActiveCaloriesBackfillDate,
+  oldestIncompleteSourceDate, oldestMissingActiveCaloriesDate, replaceSleepStages, storeOuraActiveCaloriesBackfill,
+  upsertDailyRecords } from "../db/wellness-store";
 import { enforceRetention } from "../db/retention";
+import { retentionPolicy } from "../db/retention-policy";
 
 type Connection = Awaited<ReturnType<typeof listHouseholdConnections>>[number];
+const OURA_ACTIVE_CALORIE_BACKFILL_BATCH_DAYS = 28;
 
 function requiredConfig(name: string): string {
   const value = process.env[name];
@@ -164,13 +167,36 @@ async function syncConnection(connection: Connection, date: string, now: Date) {
   }
 }
 
+async function backfillOuraActiveCalories(connection: Connection, date: string) {
+  const historyStart = shiftDate(date, -retentionPolicy.normalizedDailyMetricsDays);
+  const batchStart = await nextOuraActiveCaloriesBackfillDate(connection.memberId, historyStart, date);
+  if (!batchStart) return { changed: false, completedNow: false };
+  const proposedEnd = shiftDate(batchStart, OURA_ACTIVE_CALORIE_BACKFILL_BATCH_DAYS - 1);
+  const batchEnd = proposedEnd < date ? proposedEnd : date;
+  const accessToken = await validAccessToken(connection);
+  const activities = await getOuraCollection("daily_activity", accessToken, batchStart, batchEnd);
+  const values = activeCaloriesByDay(activities);
+  await storeOuraActiveCaloriesBackfill({ memberId: connection.memberId, startDate: batchStart, endDate: batchEnd, values });
+  return { changed: values.size > 0, completedNow: batchEnd === date };
+}
+
 export async function syncHousehold(householdId: string, timezone: string, now = new Date()) {
   const date = dateInTimezone(now, timezone);
   const connections = await listHouseholdConnections(householdId);
   const recentThreshold = now.valueOf() - 5 * 60 * 1000;
-  await Promise.all(connections.filter((item) => item.status !== "disconnected" &&
-      (item.lastSuccessAt === null || item.lastSuccessAt < recentThreshold))
+  const activeConnections = connections.filter((item) => item.status !== "disconnected");
+  await Promise.all(activeConnections.filter((item) => item.lastSuccessAt === null || item.lastSuccessAt < recentThreshold)
     .map((connection) => syncConnection(connection, date, now)));
+  const backfillResults = await Promise.all(activeConnections.filter((item) => item.provider === "oura").map(async (connection) => {
+    try {
+      return await backfillOuraActiveCalories(connection, date);
+    } catch (error) {
+      console.error("Oura active calorie backfill failed", { diagnostic: diagnosticCode(error) });
+      return { changed: false, completedNow: false };
+    }
+  }));
+  if (backfillResults.some((result) => result.changed || result.completedNow))
+    await invalidateWellnessSnapshotCache(householdId);
   await enforceRetention(date, now.valueOf());
   return date;
 }

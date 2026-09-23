@@ -135,6 +135,17 @@ export async function getOuraCollection(resource: "daily_activity" | "daily_read
 }
 
 export type SleepStage = "rem" | "light" | "deep" | "awake";
+
+export function activeCaloriesByDay(activities: JsonRecord[]): Map<string, number> {
+  const values = new Map<string, number>();
+  for (const activity of activities) {
+    if (typeof activity.day !== "string") continue;
+    const value = finiteNumber(activity.active_calories);
+    if (value !== null && value >= 0) values.set(activity.day, value);
+  }
+  return values;
+}
+
 export function decodeOuraSleepStages(value: unknown) {
   if (typeof value !== "string" || !/^[1-4]+$/.test(value)) return [];
   const stages: Record<string, SleepStage> = { "1": "deep", "2": "light", "3": "rem", "4": "awake" };

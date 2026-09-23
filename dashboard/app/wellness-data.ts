@@ -63,8 +63,8 @@ function periodLabel(currentDate: string, days: number): string {
   return `${format(startDate)} – ${format(currentDate)}`;
 }
 
-function average(values: Array<number | null>, digits = 1): number | null {
-  const present = values.filter((value): value is number => value !== null);
+function average(values: Array<number | null | undefined>, digits = 1): number | null {
+  const present = values.filter((value): value is number => typeof value === "number" && Number.isFinite(value));
   if (!present.length) return null;
   const factor = 10 ** digits;
   return Math.round((present.reduce((sum, value) => sum + value, 0) / present.length) * factor) / factor;
@@ -85,6 +85,8 @@ function mockMembersForDays(days: number): Member[] {
     ...member,
     scoreHistory: Array.from({ length: days }, (_, index) =>
       member.scoreHistory[index % member.scoreHistory.length] ?? null),
+    scoreSourceHistory: Array.from({ length: days }, (_, index) =>
+      member.scoreSourceHistory[index % member.scoreSourceHistory.length] ?? null),
     metricHistory: {
       heartRate: Array.from({ length: days }, (_, index) => member.sleepAverageHeartRate === null ? null : member.sleepAverageHeartRate + (index % 5 - 2)),
       hrv: Array.from({ length: days }, (_, index) => member.overnightHrv === null ? null : member.overnightHrv + (index % 7 - 3) * 2),
@@ -131,6 +133,8 @@ export function parseCachedSnapshot(value: string, date: string): CachedSnapshot
         (member.primaryScore === null || typeof member.primaryScore === "number") &&
         (member.primaryScoreLabel === "readiness" || member.primaryScoreLabel === "recovery") &&
         Array.isArray(member.scoreHistory) && member.scoreHistory.length === view.historyDates.length &&
+        Array.isArray(member.scoreSourceHistory) && member.scoreSourceHistory.length === view.historyDates.length &&
+        member.scoreSourceHistory.every((source) => source === "oura" || source === "whoop" || source === null) &&
         member.metricHistory && ["heartRate", "hrv", "temperature", "sleep", "activeCalories"].every((metric) =>
           Array.isArray(member.metricHistory?.[metric as keyof NonNullable<Member["metricHistory"]>]) &&
           member.metricHistory[metric as keyof NonNullable<Member["metricHistory"]>].length === view.historyDates.length))) return null;
@@ -209,7 +213,8 @@ export function buildRangeView(input: {
     const sleepAverageHeartRate = ouraHeartRate ?? whoopHeartRate;
     const ouraSleepMinutes = average(activeOuraRecords.map((item) => item.sleepTotalSeconds === null ? null : item.sleepTotalSeconds / 60));
     const ouraDeepSleepMinutes = average(activeOuraRecords.map((item) => item.deepSleepSeconds === null ? null : item.deepSleepSeconds / 60));
-    const ouraCalories = average(activeOuraRecords.map((item) => item.totalCalories));
+    const ouraActiveCalories = average(activeOuraRecords.map((item) => item.activeCalories));
+    const whoopTotalCalories = average(activeWhoopRecords.map((item) => item.totalCalories));
     const ouraRespiratoryRate = average(activeOuraRecords.map((item) => item.respiratoryRate));
     const todayWhoopRecord = input.range === "today"
       ? activeWhoopRecords.find((item) => item.localDate === input.date) ?? null
@@ -236,7 +241,7 @@ export function buildRangeView(input: {
       respiratoryRate: ouraRespiratoryRate ?? average(activeWhoopRecords.map((item) => item.respiratoryRate)),
       sleepMinutes: ouraSleepMinutes ?? average(activeWhoopRecords.map((item) => item.sleepTotalSeconds === null ? null : item.sleepTotalSeconds / 60)),
       deepSleepMinutes: ouraDeepSleepMinutes ?? average(activeWhoopRecords.map((item) => item.deepSleepSeconds === null ? null : item.deepSleepSeconds / 60)),
-      dailyCalories: ouraCalories ?? average(activeWhoopRecords.map((item) => item.totalCalories)),
+      dailyCalories: sources.includes("oura") ? ouraActiveCalories : whoopTotalCalories,
       strain: average(activeWhoopRecords.map((item) => item.dayStrain)),
       sleepStart: todaySleepRecord?.sleepStartAt ? new Intl.DateTimeFormat("en", {
         hour: "numeric", minute: "2-digit", timeZone: input.timezone,
@@ -260,6 +265,12 @@ export function buildRangeView(input: {
         const oura = ouraRecords.find((item) => item.localDate === day && item.status === "complete")?.readinessScore ?? null;
         const whoop = whoopRecords.find((item) => item.localDate === day && item.status === "complete")?.recoveryScore ?? null;
         return oura ?? whoop;
+      }),
+      scoreSourceHistory: historyDates.map((day) => {
+        const oura = ouraRecords.find((item) => item.localDate === day && item.status === "complete")?.readinessScore ?? null;
+        if (oura !== null) return "oura" as const;
+        const whoop = whoopRecords.find((item) => item.localDate === day && item.status === "complete")?.recoveryScore ?? null;
+        return whoop === null ? null : "whoop" as const;
       }),
       metricHistory: {
         heartRate: historyDates.map((day) => dailyMetric(day, "sleepAverageHeartRateBpm")),

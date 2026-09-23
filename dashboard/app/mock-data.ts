@@ -38,6 +38,7 @@ export type Member = {
   contributors: Contributor[];
   stages: SleepStage[];
   scoreHistory: Array<number | null>;
+  scoreSourceHistory: Array<Source | null>;
   metricHistory?: {
     heartRate: Array<number | null>;
     hrv: Array<number | null>;
@@ -95,13 +96,14 @@ export const members: Member[] = [
     respiratoryRate: 15.2,
     sleepMinutes: 462,
     deepSleepMinutes: 96,
-    dailyCalories: 2340,
+    dailyCalories: 540,
     strain: 9.8,
     sleepStart: "10:41pm",
     sleepEnd: "6:51am",
     contributors: contributorSet(28),
     stages,
     scoreHistory: [85, 88, 83, 69, 86, 89, 87],
+    scoreSourceHistory: Array(7).fill("oura"),
   },
   {
     id: "jordan",
@@ -122,13 +124,14 @@ export const members: Member[] = [
     respiratoryRate: 16.1,
     sleepMinutes: 350,
     deepSleepMinutes: 85,
-    dailyCalories: 2015,
+    dailyCalories: 390,
     strain: null,
     sleepStart: "11:48pm",
     sleepEnd: "6:12am",
     contributors: contributorSet(0),
     stages,
     scoreHistory: [68, 49, 65, 46, 67, 75, 61],
+    scoreSourceHistory: Array(7).fill("oura"),
   },
   {
     id: "sam",
@@ -149,13 +152,14 @@ export const members: Member[] = [
     respiratoryRate: 14.8,
     sleepMinutes: 415,
     deepSleepMinutes: 88,
-    dailyCalories: 2248,
+    dailyCalories: 620,
     strain: 11.2,
     sleepStart: "11:07pm",
     sleepEnd: "6:38am",
     contributors: contributorSet(18),
     stages,
     scoreHistory: [78, 80, 69, 77, 81, 76, 74],
+    scoreSourceHistory: Array(7).fill("oura"),
   },
 ];
 
@@ -184,4 +188,14 @@ export function readinessTone(score: number | null): Tone | "missing" {
   if (score >= 85) return "good";
   if (score >= 70) return "fair";
   return "low";
+}
+
+export function timelineTone(score: number | null, source: Source | null): string {
+  if (score === null || source === null) return "missing";
+  if (source === "whoop") {
+    if (score >= 67) return "whoop-good";
+    if (score >= 34) return "whoop-fair";
+    return "whoop-low";
+  }
+  return readinessTone(score);
 }

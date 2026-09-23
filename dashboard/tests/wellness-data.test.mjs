@@ -55,17 +55,25 @@ test("uses Oura active calories without substituting WHOOP total energy", () => 
     connections: [
       { id: "oura-1", memberId: "one", provider: "oura", status: "connected", grantedScopes: "", lastSuccessAt: 1 },
       { id: "whoop-1", memberId: "two", provider: "whoop", status: "connected", grantedScopes: "", lastSuccessAt: 1 },
+      { id: "oura-3", memberId: "three", provider: "oura", status: "connected", grantedScopes: "", lastSuccessAt: 1 },
+      { id: "whoop-3", memberId: "three", provider: "whoop", status: "connected", grantedScopes: "", lastSuccessAt: 1 },
     ],
     stored: { members: [
       { id: "one", name: "One", initials: "O", avatar: "blue", displayOrder: 0 },
       { id: "two", name: "Two", initials: "T", avatar: "amber", displayOrder: 1 },
+      { id: "three", name: "Three", initials: "T", avatar: "green", displayOrder: 2 },
     ], stages: [], records: [
       { memberId: "one", provider: "oura", localDate: "2026-09-08", status: "complete", fetchedAt: 1, activeCalories: 420, totalCalories: 2200 },
       { memberId: "two", provider: "whoop", localDate: "2026-09-08", status: "complete", fetchedAt: 1, totalCalories: 2100 },
+      { memberId: "three", provider: "oura", localDate: "2026-09-08", status: "complete", fetchedAt: 1, totalCalories: 2300 },
+      { memberId: "three", provider: "whoop", localDate: "2026-09-08", status: "complete", fetchedAt: 1, totalCalories: 2200 },
     ] },
   });
   assert.equal(view.members[0].metricHistory.activeCalories.at(-1), 420);
   assert.equal(view.members[1].metricHistory.activeCalories.at(-1), null);
+  assert.equal(view.members[0].dailyCalories, 420);
+  assert.equal(view.members[1].dailyCalories, 2100);
+  assert.equal(view.members[2].dailyCalories, null);
 });
 
 test("derives WHOOP body-temperature deviation from the member baseline", () => {
@@ -110,6 +118,7 @@ test("uses WHOOP recovery for the primary card and timeline score when Oura read
   assert.equal(view.members[0].primaryScore, 73);
   assert.equal(view.members[0].primaryScoreLabel, "recovery");
   assert.equal(view.members[0].scoreHistory.at(-1), 73);
+  assert.equal(view.members[0].scoreSourceHistory.at(-1), "whoop");
 });
 
 test("prefers Oura readiness over WHOOP recovery for the primary score", () => {
@@ -134,4 +143,5 @@ test("prefers Oura readiness over WHOOP recovery for the primary score", () => {
   assert.equal(view.members[0].primaryScore, 81);
   assert.equal(view.members[0].primaryScoreLabel, "readiness");
   assert.equal(view.members[0].scoreHistory[0], 81);
+  assert.equal(view.members[0].scoreSourceHistory[0], "oura");
 });
