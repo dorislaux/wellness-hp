@@ -26,10 +26,16 @@ This project uses `1.XX` release numbers for product releases. ChatGPT Sites als
 | `1.20` | 20 | 2026-09-17 | `f0746e1` | Invalidated pre-1.19 dashboard snapshots and rejected incompatible cached data to prevent the first-screen error 1101. |
 | `1.21` | 21 | 2026-09-18 | `ae5edd0` | Stacked 7/14/28-day timelines by week with household averages, opened Timeline at 7D, and added member and family Analysis trends for heart rate, HRV, temperature, sleep, and Oura active calories without a family-chart area fill. |
 | `1.22` | 22 | 2026-09-24 | `57ff2e7` | Switched Oura-connected cards to active calories, added resumable historical Oura calorie backfill and cache invalidation, made date-range options divide evenly, and applied provider-specific timeline score colors. |
+| `1.23` | 23 | 2026-10-12 | `cd20ebb` | Added owner-authorized, resumable 180-day Oura and WHOOP history backfills in bounded chunks; deployed and ran the historical backfill. |
+| `1.24` | 24 | 2026-10-12 | `a8372b8` | Temporarily deployed an owner-only, read-only Oura sleep-boundary diagnostic. |
+| `1.25` | 25 | 2026-10-12 | `0b50aab` | Removed the temporary sleep-boundary diagnostic after confirming the upstream start-date omission. |
+| `1.26` | 26 | 2026-10-12 | `0012468` | Corrected the shared Oura sleep request boundary and ran a bounded, Dory-only historical sleep repair using a temporary owner-only control. |
+| `1.27` | 27 | 2026-10-12 | `aa8266c` | Removed the temporary repair control while retaining the sleep-boundary fix; this is the current deployed release. |
 
 ## Numbering convention
 
-- The next release is `1.23`, corresponding to Sites version 23.
+- The next release is `1.28`, corresponding to Sites version 28.
 - Increment the final two digits for each published release: `1.16`, `1.17`, and so on.
 - Record a release here only after its Sites deployment succeeds.
 - Sites version numbers remain system-managed; this file is the canonical product-release history.
+- Temporary deployed operator-only versions also receive `1.XX` release names so the mapping remains one-to-one.
