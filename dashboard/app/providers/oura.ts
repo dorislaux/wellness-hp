@@ -104,10 +104,10 @@ export async function getOuraProfile(accessToken: string, fetchImpl: Fetch = fet
   return { userId: requiredString(profile.id, "Oura profile response omitted a valid user ID.") };
 }
 
-function addOneDay(date: string): string {
+function shiftDay(date: string, days: number): string {
   const parsed = new Date(`${date}T00:00:00.000Z`);
   if (!Number.isFinite(parsed.valueOf())) throw new Error("Oura date is invalid.");
-  parsed.setUTCDate(parsed.getUTCDate() + 1);
+  parsed.setUTCDate(parsed.getUTCDate() + days);
   return parsed.toISOString().slice(0, 10);
 }
 
@@ -117,8 +117,8 @@ export async function getOuraCollection(resource: "daily_activity" | "daily_read
   let nextToken: string | undefined;
   const seen = new Set<string>();
   for (let page = 0; page < 20; page += 1) {
-    const query = new URLSearchParams({ start_date: startDate,
-      end_date: resource === "sleep" || resource === "daily_activity" ? addOneDay(endDate) : endDate });
+    const query = new URLSearchParams({ start_date: resource === "sleep" ? shiftDay(startDate, -1) : startDate,
+      end_date: resource === "sleep" || resource === "daily_activity" ? shiftDay(endDate, 1) : endDate });
     if (nextToken) query.set("next_token", nextToken);
     const payload = record(await ouraGet(resource, accessToken, query, fetchImpl), "Oura collection response was invalid.");
     if (!Array.isArray(payload.data)) throw new Error("Oura collection omitted data.");

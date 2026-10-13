@@ -181,6 +181,26 @@ export async function householdHasMember(
   return Boolean(row);
 }
 
+export async function getHouseholdUserMemberId(
+  householdId: string,
+  siteUserId: string,
+  database?: Database,
+): Promise<string | null> {
+  const db = database ?? await getDb();
+  const [row] = await db
+    .select({ memberId: householdUserMembers.memberId })
+    .from(householdUserMembers)
+    .innerJoin(members, eq(members.id, householdUserMembers.memberId))
+    .where(and(
+      eq(householdUserMembers.householdId, householdId),
+      eq(householdUserMembers.siteUserId, siteUserId),
+      eq(members.householdId, householdId),
+      eq(members.active, true),
+    ))
+    .limit(1);
+  return row?.memberId ?? null;
+}
+
 export async function listManageableMemberIds(
   household: HouseholdContext,
   siteUserId: string,

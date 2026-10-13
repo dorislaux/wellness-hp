@@ -30,7 +30,7 @@ function shiftDate(date: string, days: number): string {
   return value.toISOString().slice(0, 10);
 }
 
-async function validAccessToken(connection: Connection) {
+export async function validAccessToken(connection: Connection) {
   const envelope = await readProviderCredential(connection.id);
   if (!envelope) throw new Error("Provider credential is missing.");
   const keyMaterial = requiredConfig("TOKEN_ENCRYPTION_KEY_V1");

@@ -45,6 +45,38 @@ test("requests Oura daily activity with an inclusive dashboard end date", async 
   assert.deepEqual(records, [{ day: "2026-09-04", total_calories: 2340 }]);
 });
 
+test("requests sleep from the preceding day but retains only nights labelled in range", async () => {
+  let requestedUrl;
+  const records = await getOuraCollection("sleep", "access-token", "2026-04-29", "2026-04-30",
+    async (url) => { requestedUrl = new URL(url); return Response.json({ data: [
+      { day: "2026-04-28", type: "long_sleep", average_hrv: 40 },
+      { day: "2026-04-29", type: "long_sleep", average_hrv: 52,
+        bedtime_start: "2026-04-28T23:18:32+08:00", bedtime_end: "2026-04-29T08:02:25+08:00" },
+      { day: "2026-05-01", type: "long_sleep", average_hrv: 45 },
+    ], next_token: null }); });
+  assert.equal(requestedUrl.searchParams.get("start_date"), "2026-04-28");
+  assert.equal(requestedUrl.searchParams.get("end_date"), "2026-05-01");
+  assert.deepEqual(records.map((item) => item.day), ["2026-04-29"]);
+  assert.equal(normalizeOuraDay({ date: "2026-04-29", readiness: [], sleeps: records }).sleepAverageHrvMs, 52);
+});
+
+test("paginates collections and retries a rate-limited page within a fixed bound", async () => {
+  const urls = [];
+  let calls = 0;
+  const records = await getOuraCollection("daily_readiness", "access-token", "2026-09-01", "2026-09-02",
+    async (url) => {
+      urls.push(new URL(url));
+      calls += 1;
+      if (calls === 1) return Response.json({ error: "rate_limited" }, { status: 429,
+        headers: { "retry-after": "0" } });
+      if (calls === 2) return Response.json({ data: [{ day: "2026-09-01", score: 80 }], next_token: "next" });
+      return Response.json({ data: [{ day: "2026-09-02", score: 82 }], next_token: null });
+    });
+  assert.equal(calls, 3);
+  assert.equal(urls[2].searchParams.get("next_token"), "next");
+  assert.deepEqual(records.map((record) => record.day), ["2026-09-01", "2026-09-02"]);
+});
+
 test("normalizes only an exact Oura date and selects the main sleep", () => {
   const value = normalizeOuraDay({ date: "2026-09-04",
     activities: [{ day: "2026-09-04", total_calories: 2340, active_calories: 410 }],

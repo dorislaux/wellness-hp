@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { getDb, type Database } from "./index";
-import { dailySourceRecords, members, providerConnections, sleepStageSegments, wellnessSnapshotCache } from "./schema";
+import { dailySourceRecords, members, providerConnections, sleepStageSegments, syncAttempts,
+  wellnessSnapshotCache } from "./schema";
 import { writeBatches } from "./write-batches";
 
 export type DailyRecordInput = typeof dailySourceRecords.$inferInsert;
@@ -160,6 +161,106 @@ export async function storeOuraActiveCaloriesBackfill(input: { memberId: string;
         } });
   }
 }
+
+export type OuraHistoryCoverage = {
+  completeDays: number;
+  firstCompleteDate: string | null;
+  lastCompleteDate: string | null;
+  usableNights: {
+    hrv: number;
+    hrvBalance: number;
+    readiness: number;
+    allThree: number;
+  };
+};
+
+export async function readOuraHistoryCoverage(input: { memberId: string; startDate: string; endDate: string },
+  database?: Database): Promise<OuraHistoryCoverage> {
+  const db = database ?? await getDb();
+  const records = await db.select({ localDate: dailySourceRecords.localDate, status: dailySourceRecords.status,
+    hrv: dailySourceRecords.sleepAverageHrvMs, hrvBalance: dailySourceRecords.hrvBalanceScore,
+    readiness: dailySourceRecords.readinessScore }).from(dailySourceRecords).where(and(
+      eq(dailySourceRecords.memberId, input.memberId), eq(dailySourceRecords.provider, "oura"),
+      gte(dailySourceRecords.localDate, input.startDate), lte(dailySourceRecords.localDate, input.endDate),
+    )).orderBy(asc(dailySourceRecords.localDate));
+  const complete = records.filter((record) => record.status === "complete");
+  return {
+    completeDays: complete.length,
+    firstCompleteDate: complete[0]?.localDate ?? null,
+    lastCompleteDate: complete.at(-1)?.localDate ?? null,
+    usableNights: {
+      hrv: records.filter((record) => record.hrv !== null).length,
+      hrvBalance: records.filter((record) => record.hrvBalance !== null).length,
+      readiness: records.filter((record) => record.readiness !== null).length,
+      allThree: records.filter((record) => record.hrv !== null && record.hrvBalance !== null &&
+        record.readiness !== null).length,
+    },
+  };
+}
+
+export type WhoopHistoryCoverage = {
+  completeDays: number;
+  firstCompleteDate: string | null;
+  lastCompleteDate: string | null;
+  usableNights: {
+    hrv: number;
+    recovery: number;
+    sleep: number;
+    allThree: number;
+  };
+};
+
+export async function readWhoopHistoryCoverage(input: { memberId: string; startDate: string; endDate: string },
+  database?: Database): Promise<WhoopHistoryCoverage> {
+  const db = database ?? await getDb();
+  const records = await db.select({ localDate: dailySourceRecords.localDate, status: dailySourceRecords.status,
+    hrv: dailySourceRecords.sleepAverageHrvMs, recovery: dailySourceRecords.recoveryScore,
+    sleep: dailySourceRecords.sleepTotalSeconds }).from(dailySourceRecords).where(and(
+      eq(dailySourceRecords.memberId, input.memberId), eq(dailySourceRecords.provider, "whoop"),
+      gte(dailySourceRecords.localDate, input.startDate), lte(dailySourceRecords.localDate, input.endDate),
+    )).orderBy(asc(dailySourceRecords.localDate));
+  const complete = records.filter((record) => record.status === "complete");
+  return {
+    completeDays: complete.length,
+    firstCompleteDate: complete[0]?.localDate ?? null,
+    lastCompleteDate: complete.at(-1)?.localDate ?? null,
+    usableNights: {
+      hrv: records.filter((record) => record.hrv !== null).length,
+      recovery: records.filter((record) => record.recovery !== null).length,
+      sleep: records.filter((record) => record.sleep !== null).length,
+      allThree: records.filter((record) => record.hrv !== null && record.recovery !== null &&
+        record.sleep !== null).length,
+    },
+  };
+}
+
+export async function listSucceededOuraHistoryChunks(input: { connectionId: string; startDate: string; endDate: string },
+  database?: Database): Promise<string[]> {
+  const db = database ?? await getDb();
+  const rows = await db.select({ localDate: syncAttempts.localDate }).from(syncAttempts).where(and(
+    eq(syncAttempts.connectionId, input.connectionId), eq(syncAttempts.status, "succeeded"),
+    gte(syncAttempts.localDate, input.startDate), lte(syncAttempts.localDate, input.endDate),
+  )).orderBy(asc(syncAttempts.localDate));
+  return [...new Set(rows.flatMap((row) => row.localDate ? [row.localDate] : []))];
+}
+
+export async function startOuraHistoryChunk(connectionId: string, localDate: string, database?: Database) {
+  const db = database ?? await getDb();
+  const id = crypto.randomUUID();
+  await db.insert(syncAttempts).values({ id, connectionId, localDate, status: "started", startedAt: Date.now() });
+  return id;
+}
+
+export async function finishOuraHistoryChunk(attemptId: string, status: "succeeded" | "failed", errorCode?: string,
+  database?: Database) {
+  const db = database ?? await getDb();
+  await db.update(syncAttempts).set({ status, errorCode: errorCode ?? null, finishedAt: Date.now() })
+    .where(eq(syncAttempts.id, attemptId));
+}
+
+export const listSucceededWhoopHistoryChunks = listSucceededOuraHistoryChunks;
+export const startWhoopHistoryChunk = startOuraHistoryChunk;
+export const finishWhoopHistoryChunk = finishOuraHistoryChunk;
 
 export async function replaceSleepStages(input: { memberId: string; localDate: string;
   stages: Array<{ stage: "rem" | "light" | "deep" | "awake"; durationSeconds: number }> }, database?: Database) {
