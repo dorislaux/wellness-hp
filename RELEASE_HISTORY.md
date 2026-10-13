@@ -2,6 +2,19 @@
 
 This project uses `1.XX` names for Sites versions. Sites assigns the immutable number; GitHub and Sites can have different commit hashes for the same code. Dates below use the household's Asia/Shanghai timezone.
 
+## Source-history audit
+
+A read-only source audit completed on 2026-10-13 accounted for all 27 saved Sites versions across the retained Sites history and the GitHub history. The comparison used complete tracked Git trees and object hashes; it establishes source parity, not build, test, runtime, or deployment validation.
+
+- Versions 1–11: each original Sites root tree exactly equals the `dashboard/` subtree in its documented GitHub counterpart. The remaining GitHub paths are repository wrapper material outside the application subtree.
+- Versions 12–14: each Sites commit and its documented GitHub counterpart have identical complete root trees.
+- Version 15: the Sites and GitHub dashboard trees are identical. The only complete-tree difference is this release-history documentation.
+- Versions 16–22: Sites and GitHub use the same commit IDs and have exact commit and root-tree equality.
+- Versions 23–26: the original Sites commit objects remain preserved and readable (`cd20ebbd64c371ca3ad085cbb787eb57678cc4c1`, `a8372b8d05798e827febc3451ac0867484220656`, `0b50aab4138ebd8e94bc2a8a38747b95e8d98c2b`, and `00124681a743b497a53fb2c1b5389d1e4e3a6e30`). They are not represented as separate GitHub code commits.
+- Version 27: Sites commit `aa8266c0813f33e52608fa033fcbe816da6aa6f2` and [GitHub commit `2164cff0be75c62e8a790c0f33692cca9bdebbb5`](https://github.com/dorislaux/wellness-hp/commit/2164cff0be75c62e8a790c0f33692cca9bdebbb5) have the identical `dashboard/` subtree `9b377fc6191f2f683592c2958f1fc918732d0cbc`. A path-by-path comparison of all 149 tracked files found only `RELEASE_HISTORY.md` different; application code and root configuration are identical.
+
+GitHub therefore contains a verified counterpart for every final application state listed below, but it is not a standalone original-commit archive of every intermediate Sites version.
+
 | Release | Sites version | Published | GitHub code commit | Sites source commit | Summary |
 | --- | ---: | --- | --- | --- | --- |
 | `1.01` | 1 | 2026-09-04 | `3423ba0` | `370096d` | Added the production Oura and WHOOP dashboard integration. |
